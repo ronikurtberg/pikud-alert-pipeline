@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pikud HaOref — Command Center</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/sql/sql.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{--bg:#f4f6fb;--bg2:#fff;--bg3:#f0f2f9;--bg4:#e4e8f4;--border:#dce0ee;--text:#111827;--text2:#4b5178;--text3:#8790b0;--accent:#4f46e5;--accent2:#6366f1;--red:#dc2626;--green:#16a34a;--orange:#d97706;--cyan:#0891b2;--blue:#2563eb;--purple:#7c3aed;--shadow:0 2px 16px rgba(0,0,0,.06);--shadow2:0 8px 40px rgba(0,0,0,.10)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+body.rtl{direction:rtl;text-align:right}
+
+/* LOADING OVERLAY */
+#loading{position:fixed;inset:0;background:rgba(17,24,39,.7);z-index:9999;display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(4px)}
+#loading.show{display:flex}
+#loading .spin{width:48px;height:48px;border:4px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:lspin .8s linear infinite}
+@keyframes lspin{to{transform:rotate(360deg)}}
+#loading .ltxt{color:#fff;font-size:14px;font-weight:700;letter-spacing:.5px}
+
+/* HEADER */
+.hdr{background:linear-gradient(135deg,#1e1b4b,#312e81);padding:10px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 4px 20px rgba(30,27,75,.3)}
+.hdr .logo{display:flex;align-items:center;gap:10px}
+.hdr .logo-icon{width:36px;height:36px;background:linear-gradient(135deg,#ef4444,#f97316);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 0 20px rgba(239,68,68,.4);animation:pulse 2.5s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 20px rgba(239,68,68,.4)}50%{box-shadow:0 0 40px rgba(239,68,68,.6)}}
+.hdr h1{font-size:16px;font-weight:900;color:#fff}
+.hdr .right{display:flex;gap:6px;margin-left:auto;align-items:center}
+body.rtl .hdr .right{margin-left:0;margin-right:auto}
+.badge{font-size:10px;padding:4px 10px;border-radius:20px;font-weight:700;color:#fff;background:rgba(255,255,255,.15)}
+.badge-live{background:rgba(34,197,94,.2);color:#4ade80;display:flex;align-items:center;gap:5px}
+.badge-live::before{content:'';width:6px;height:6px;border-radius:50%;background:#4ade80;animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.lang-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;color:#e0e7ff;font-family:'Inter'}
+
+/* PREFILTERS */
+.pf-bar{display:flex;gap:5px;padding:8px 20px;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;align-items:center;flex-wrap:wrap}
+.pf-btn{padding:6px 14px;border-radius:20px;border:2px solid var(--border);background:var(--bg2);font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;font-family:'Inter';display:flex;align-items:center;gap:4px;white-space:nowrap;color:var(--text2)}
+.pf-btn:hover{border-color:var(--accent);color:var(--accent)}
+.pf-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 2px 10px rgba(79,70,229,.3)}
+.pf-info{font-size:11px;color:var(--accent);font-weight:700;font-family:'JetBrains Mono';margin-left:8px;padding:4px 10px;background:#eef2ff;border-radius:8px}
+
+/* TABS */
+.tabs{display:flex;background:var(--bg2);border-bottom:2px solid var(--border);padding:0 20px;overflow-x:auto}
+.tab{padding:12px 16px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text3);border-bottom:3px solid transparent;transition:all .2s;white-space:nowrap}
+.tab:hover{color:var(--text2);background:var(--bg3)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* LAYOUT */
+.page{display:none;padding:14px 20px;animation:fadeIn .3s}.page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.grid{display:grid;gap:12px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr 1fr}.g4{grid-template-columns:repeat(4,1fr)}.g6{grid-template-columns:repeat(6,1fr)}
+@media(max-width:1400px){.g6{grid-template-columns:repeat(3,1fr)}}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}
+.card-h{padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg3)}
+.card-h h3{font-size:12px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:6px}
+.card-b{padding:12px 14px}.card-b.np{padding:0}
+
+/* STAT CARDS */
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;position:relative;box-shadow:var(--shadow);overflow:visible}
+.stat::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.stat.red::before{background:var(--red)}.stat.blue::before{background:var(--blue)}.stat.green::before{background:var(--green)}.stat.purple::before{background:var(--purple)}.stat.orange::before{background:var(--orange)}.stat.cyan::before{background:var(--cyan)}
+.stat .lb{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);font-weight:800;margin-bottom:2px}
+.stat .val{font-size:24px;font-weight:900;letter-spacing:-.5px;line-height:1.1}
+.stat.red .val{color:var(--red)}.stat.blue .val{color:var(--blue)}.stat.green .val{color:var(--green)}.stat.purple .val{color:var(--purple)}.stat.orange .val{color:var(--orange)}.stat.cyan .val{color:var(--cyan)}
+.stat .sub{font-size:10px;color:var(--text3);margin-top:2px;cursor:help}
+.stat .big-icon{position:absolute;right:10px;bottom:6px;font-size:28px;opacity:.08}
+
+/* TOOLTIP */
+[data-tip]{position:relative;cursor:help}
+[data-tip]:hover::after{content:attr(data-tip);position:absolute;top:100%;left:50%;transform:translateX(-50%);background:#1e1b4b;color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;white-space:pre-line;max-width:360px;z-index:200;box-shadow:var(--shadow2);line-height:1.6;font-weight:500;margin-top:4px}
+
+/* TICKER */
+.ticker{background:linear-gradient(90deg,#fef2f2,#fff);border:2px solid #fecaca;border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:12px;animation:tp 3s infinite}
+@keyframes tp{0%,100%{border-color:#fecaca}50%{border-color:#ef4444}}
+.ticker .siren{font-size:20px;animation:sirenSpin 1s infinite alternate}
+@keyframes sirenSpin{0%{transform:rotate(-12deg)}100%{transform:rotate(12deg)}}
+.ticker .time{color:var(--red);font-weight:800;font-family:'JetBrains Mono';font-size:11px}
+.ticker .txt{color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;font-weight:600;font-size:11px}
+
+.btn{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;font-family:'Inter'}
+.btn:hover{background:var(--bg4);border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn:disabled{opacity:.4;cursor:not-allowed}
+
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:8px 12px;background:var(--bg3);color:var(--text2);font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);position:sticky;top:0}
+body.rtl th{text-align:right}
+td{padding:6px 12px;border-bottom:1px solid var(--border)}
+tr:hover td{background:#f8f9ff}
+
+.log-box{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-family:'JetBrains Mono';font-size:11px;line-height:1.9;max-height:500px;min-height:120px;overflow-y:auto;white-space:pre-wrap}
+.ll.error{color:var(--red);font-weight:600}.ll.success{color:var(--green);font-weight:600}.ll.info{color:var(--text3)}
+.sql-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.CodeMirror{height:140px;font-size:12px}
+.qr{max-height:380px;overflow:auto;margin-top:10px}
+
+.erd-card{background:var(--bg2);border:2px solid var(--border);border-radius:12px;min-width:200px;box-shadow:var(--shadow);overflow:hidden}
+.erd-card-h{padding:10px 14px;font-weight:800;font-size:14px;display:flex;justify-content:space-between;align-items:center;color:#fff}
+.erd-col{padding:5px 14px;font-size:11px;display:flex;justify-content:space-between;border-top:1px solid var(--border)}
+.erd-col .t{color:var(--text3);font-size:10px}.erd-col .pk{color:var(--orange);font-weight:800}.erd-col .fk{color:var(--cyan);font-weight:700}
+
+.pipe-status{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;font-size:12px;font-weight:700;margin-bottom:10px}
+.pipe-status.idle{background:var(--bg3);color:var(--text3)}.pipe-status.running{background:#eef2ff;color:var(--accent);border:2px solid #c7d2fe}
+.spinner{width:14px;height:14px;border:3px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.file-list{list-style:none}.file-list li{padding:8px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;cursor:pointer;font-size:12px;transition:background .2s}
+.file-list li:hover{background:var(--bg3)}.file-list .meta{color:var(--text3);font-size:10px}
+
+/* DATA JOURNEY */
+.journey-card{border:1px solid var(--border);border-radius:12px;background:var(--bg2);margin-bottom:14px;box-shadow:var(--shadow);overflow:hidden}
+.journey-header{padding:12px 16px;background:linear-gradient(135deg,#1e1b4b,#312e81);color:#fff;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.journey-header h4{font-size:13px;font-weight:800;display:flex;align-items:center;gap:8px}
+.journey-header .jh-badge{font-size:10px;padding:2px 8px;border-radius:6px;font-weight:700}
+.journey-body{display:none;padding:0}
+.journey-body.open{display:block}
+.journey-flow{display:flex;gap:0;position:relative;overflow-x:auto;padding:16px}
+.journey-stage{min-width:220px;max-width:280px;flex-shrink:0;opacity:0;transform:translateY(20px);transition:all 0.5s ease}
+.journey-stage.visible{opacity:1;transform:translateY(0)}
+.journey-arrow{display:flex;align-items:center;justify-content:center;min-width:50px;flex-shrink:0;opacity:0;transition:opacity 0.4s ease}
+.journey-arrow.visible{opacity:1}
+.journey-arrow svg{width:40px;height:24px}
+.stage-box{border:2px solid var(--border);border-radius:10px;overflow:hidden;height:100%}
+.stage-head{padding:8px 10px;font-weight:800;font-size:11px;color:#fff;display:flex;align-items:center;gap:6px}
+.stage-body{padding:10px;font-size:10px;line-height:1.7;max-height:320px;overflow-y:auto}
+.stage-body code{background:var(--bg3);padding:1px 4px;border-radius:3px;font-size:9px}
+.stage-body .field-row{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid var(--bg3)}
+.stage-body .field-row:last-child{border-bottom:none}
+.stage-body .fname{font-weight:700;color:var(--text)}
+.stage-body .fval{color:var(--text2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl}
+.stage-body .calc-badge{background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:4px;font-size:8px;font-weight:800}
+.journey-counts{display:flex;gap:8px;padding:10px 16px;background:var(--bg3);border-top:1px solid var(--border);opacity:0;transition:all 0.5s ease}
+.journey-counts.visible{opacity:1}
+.jcount{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;text-align:center;flex:1}
+.jcount .jc-val{font-size:18px;font-weight:900}.jcount .jc-lbl{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+
+/* DYNAMIC FILTERS */
+.filter-bar{display:flex;gap:6px;padding:6px 20px;background:var(--bg2);border-bottom:1px solid var(--border);align-items:center;flex-wrap:wrap}
+.filter-group{position:relative;display:flex;align-items:center;gap:4px}
+.filter-group label{font-size:9px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+.filter-input{font-family:'Inter';font-size:11px;padding:5px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);width:160px;outline:none}
+.filter-input:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(79,70,229,.15)}
+.filter-select{font-family:'Inter';font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);outline:none;cursor:pointer}
+.filter-select:focus{border-color:var(--accent)}
+.autocomplete-list{position:absolute;top:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--border);border-radius:8px;max-height:200px;overflow-y:auto;z-index:300;box-shadow:var(--shadow2);display:none;margin-top:2px}
+.autocomplete-list.show{display:block}
+.autocomplete-list div{padding:6px 10px;font-size:11px;cursor:pointer;direction:rtl;text-align:right}
+.autocomplete-list div:hover,.autocomplete-list div.highlight{background:var(--bg3);color:var(--accent)}
+.active-filter-banner{background:linear-gradient(90deg,#eef2ff,#faf5ff);border:2px solid #c7d2fe;border-radius:10px;padding:8px 16px;margin:8px 20px 0;display:none;align-items:center;gap:8px;font-size:12px;font-weight:700;flex-wrap:wrap}
+.active-filter-banner.show{display:flex}
+.filter-tag{background:var(--accent);color:#fff;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:800;display:inline-flex;align-items:center;gap:4px}
+.filter-tag .x{cursor:pointer;opacity:.7;font-size:12px}.filter-tag .x:hover{opacity:1}
+
+/* DRILL-DOWN MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.show{display:flex}
+.modal-box{background:var(--bg2);border-radius:16px;width:90%;max-width:800px;max-height:85vh;display:flex;flex-direction:column;box-shadow:var(--shadow2)}
+.modal-head{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.modal-head h3{font-size:14px;font-weight:900}
+.modal-body{overflow-y:auto;flex:1;padding:0}
+.alert-feed-item{padding:12px 16px;border-bottom:1px solid var(--border);direction:rtl;text-align:right}
+.alert-feed-item:hover{background:var(--bg3)}
+.alert-feed-meta{display:flex;gap:8px;align-items:center;margin-bottom:4px;direction:ltr;font-size:11px}
+.alert-feed-text{font-size:12px;line-height:1.7;color:var(--text2)}
+.alert-feed-cities{font-size:10px;color:var(--text3);margin-top:4px;direction:rtl}
+
+.plotly-chart{width:100%;min-height:220px}.tall{min-height:400px}
+.sec-title{font-size:16px;font-weight:900;margin:16px 0 10px;display:flex;align-items:center;gap:8px}
+.sec-title .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+/* COMMAND CENTER ANIMATIONS */
+.stat{transition:transform .2s,box-shadow .2s}
+.stat:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,0,0,.1)}
+.hdr{background-size:200% 200%;animation:hdrGlow 8s ease infinite}
+@keyframes hdrGlow{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+.page{animation:fadeSlide .4s ease}
+@keyframes fadeSlide{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.card{transition:box-shadow .2s}.card:hover{box-shadow:0 4px 20px rgba(0,0,0,.08)}
+.ticker{position:relative;overflow:hidden}
+.ticker::after{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(239,68,68,.05),transparent);animation:scanLine 4s linear infinite}
+@keyframes scanLine{to{left:100%}}
+.badge-live::before{animation:blink 1.5s infinite}
+.filter-tag{animation:tagPop .3s ease}
+@keyframes tagPop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div id="loading"><div class="spin"></div><div class="ltxt" id="load-txt">Loading data...</div></div>
+
+<div class="hdr">
+  <div class="logo" style="cursor:pointer" onclick="goHome()"><div class="logo-icon">🚨</div><h1 id="h-title">PIKUD HAOREF COMMAND CENTER</h1></div>
+  <div class="right">
+    <button class="lang-btn" onclick="toggleLang()">עב/EN</button>
+    <span class="badge" id="hdr-ver">v-</span>
+    <span class="badge" id="hdr-cnt">-</span>
+    <span class="badge badge-live">LIVE</span>
+  </div>
+</div>
+
+<div class="pf-bar" id="pf-bar"><span style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Period</span></div>
+<div class="filter-bar" id="filter-bar">
+  <span style="font-size:9px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Filters</span>
+  <div class="filter-group">
+    <label>Type</label>
+    <select class="filter-select" id="filter-alert-type" onchange="applyDynFilter()">
+      <option value="">All types</option>
+    </select>
+  </div>
+  <div class="filter-group" style="position:relative">
+    <label>Zone</label>
+    <input class="filter-input" id="filter-zone" placeholder="Search zone..." autocomplete="off" oninput="showAutocomplete('zone')" onfocus="showAutocomplete('zone')" style="width:180px">
+    <div class="autocomplete-list" id="ac-zone"></div>
+  </div>
+  <div class="filter-group" style="position:relative">
+    <label>City</label>
+    <input class="filter-input" id="filter-city" placeholder="Search city..." autocomplete="off" oninput="showAutocomplete('city')" onfocus="showAutocomplete('city')" style="width:180px">
+    <div class="autocomplete-list" id="ac-city"></div>
+  </div>
+  <button class="btn" onclick="clearDynFilters()" style="font-size:10px;padding:4px 10px">✕ Clear</button>
+</div>
+<div class="active-filter-banner" id="active-filter-banner">
+  <span style="font-size:10px;color:var(--text3)">ACTIVE FILTERS:</span>
+  <div id="active-filter-tags"></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-page="overview">📊 Overview</div>
+  <div class="tab" data-page="viz">📈 Intelligence</div>
+  <div class="tab" data-page="model">🗄️ Data Model</div>
+  <div class="tab" data-page="journey">🔄 Data Journey</div>
+  <div class="tab" data-page="pipeline">⚡ Pipeline</div>
+  <div class="tab" data-page="tableau">📊 Tableau Ready</div>
+  <div class="tab" data-page="query">🔍 SQL</div>
+</div>
+
+<!-- ===== OVERVIEW (no scroll — fits viewport) ===== -->
+<div class="page active" id="page-overview">
+  <div id="ticker" style="margin-bottom:8px"></div>
+  <div class="grid g6" id="stat-cards" style="margin-bottom:8px"></div>
+  <div class="grid g3" style="height:calc(100vh - 280px);min-height:280px">
+    <div class="card" style="display:flex;flex-direction:column"><div class="card-h"><h3>📅 Alert Timeline</h3></div><div class="card-b np" style="flex:1"><div id="ov-daily" style="width:100%;height:100%"></div></div></div>
+    <div class="card" style="display:flex;flex-direction:column"><div class="card-h"><h3>🏙️ Top Cities</h3><div style="margin-left:auto;display:flex;gap:3px"><button class="btn" style="font-size:9px;padding:2px 6px" onclick="sortCities('desc')">▼ Most</button><button class="btn" style="font-size:9px;padding:2px 6px" onclick="sortCities('asc')">▲ Least</button></div></div><div class="card-b np" style="flex:1"><div id="ov-cities" style="width:100%;height:100%"></div></div></div>
+    <div class="card" style="display:flex;flex-direction:column"><div class="card-h"><h3>🕐 Hourly Risk (IST)</h3></div><div class="card-b np" style="flex:1"><div id="ov-hourly" style="width:100%;height:100%"></div></div></div>
+  </div>
+</div>
+
+<!-- ===== INTELLIGENCE ===== -->
+<div class="page" id="page-viz">
+  <div class="sec-title"><div class="dot"></div> <span data-i18n="threat_analysis">Threat Analysis</span></div>
+  <div class="grid g2">
+    <div class="card"><div class="card-h"><h3>🔥 Daily Intensity <span data-viz-meta="daily" style="font-size:10px;color:var(--text3)">ⓘ</span></h3></div><div class="card-b np"><div id="vz-daily" class="plotly-chart tall"></div></div></div>
+    <div class="card"><div class="card-h"><h3>📆 Monthly Trend <span data-viz-meta="monthly" style="font-size:10px;color:var(--text3)">ⓘ</span></h3></div><div class="card-b np"><div id="vz-monthly" class="plotly-chart tall"></div></div></div>
+  </div>
+
+  <div class="sec-title"><div class="dot" style="background:var(--red)"></div> <span data-i18n="geographic">Geographic Intel</span></div>
+  <div class="grid g2">
+    <div class="card"><div class="card-h"><h3>🏙️ Top 25 Cities <span data-viz-meta="top_cities" style="font-size:10px;color:var(--text3)">ⓘ</span></h3></div><div class="card-b np"><div id="vz-cities" class="plotly-chart tall"></div></div></div>
+    <div class="card"><div class="card-h"><h3>🗺️ Zones <span data-viz-meta="zones" style="font-size:10px;color:var(--text3)">ⓘ</span></h3></div><div class="card-b np"><div id="vz-zones" class="plotly-chart tall"></div></div></div>
+  </div>
+  <div class="grid g2" style="margin-top:12px">
+    <div class="card"><div class="card-h"><h3>✈️ Top Drone Cities <span data-viz-meta="drone_cities" style="font-size:10px;color:var(--text3)">ⓘ</span></h3></div><div class="card-b np"><div id="vz-drones" class="plotly-chart tall"></div></div></div>
+    <div class="card"><div class="card-h"><h3>⚠️ City vs Zone Anomaly <span data-viz-meta="city_zone_anomaly" style="font-size:10px;color:var(--text3)">ⓘ</span></h3></div><div class="card-b np"><div id="vz-anomaly" class="plotly-chart tall"></div></div></div>
+  </div>
+
+  <div class="sec-title"><div class="dot" style="background:var(--green)"></div> <span data-i18n="civilian">Civilian Intel</span></div>
+  <div class="grid g3">
+    <div class="card"><div class="card-h"><h3>🚿 Safest 10-Min <span data-viz-meta="safest_10min" style="font-size:10px;color:var(--text3)">ⓘ</span></h3></div><div class="card-b np"><div id="vz-shower10" class="plotly-chart tall"></div></div></div>
+    <div class="card"><div class="card-h"><h3>📅 Day of Week <span data-viz-meta="dow" style="font-size:10px;color:var(--text3)">ⓘ</span></h3></div><div class="card-b np"><div id="vz-dow" class="plotly-chart tall"></div></div></div>
+    <div class="card"><div class="card-h"><h3>⏱️ Shelter Time <span data-viz-meta="shelter_times" style="font-size:10px;color:var(--text3)">ⓘ</span></h3></div><div class="card-b np"><div id="vz-shelter" class="plotly-chart tall"></div></div></div>
+  </div>
+
+  <div class="sec-title"><div class="dot" style="background:var(--orange)"></div> <span data-i18n="advanced">Advanced</span></div>
+  <div class="grid g2">
+    <div class="card"><div class="card-h"><h3>🌡️ Escalation Heatmap <span data-viz-meta="escalation" style="font-size:10px;color:var(--text3)">ⓘ</span></h3></div><div class="card-b np"><div id="vz-escalation" class="plotly-chart tall"></div></div></div>
+    <div class="card"><div class="card-h"><h3>🎯 Multi-Zone Attacks <span data-viz-meta="multi_zone" style="font-size:10px;color:var(--text3)">ⓘ</span></h3></div><div class="card-b np"><div id="vz-multizone" class="plotly-chart tall"></div></div></div>
+  </div>
+  <div class="grid g2" style="margin-top:12px">
+    <div class="card"><div class="card-h"><h3>⏳ Alert Duration <span data-viz-meta="response_time" style="font-size:10px;color:var(--text3)">ⓘ</span></h3></div><div class="card-b" id="vz-response" style="font-size:13px"></div></div>
+    <div class="card"><div class="card-h"><h3>🔥 Longest Streaks <span data-viz-meta="streaks" style="font-size:10px;color:var(--text3)">ⓘ</span></h3></div><div class="card-b" id="vz-streaks" style="max-height:420px;overflow:auto"></div></div>
+  </div>
+
+  <div class="sec-title"><div class="dot" style="background:var(--purple)"></div> <span data-i18n="early_warning_section">Early Warning & Event Lifecycle</span></div>
+  <div style="background:#f5f3ff;border:2px solid #c4b5fd;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:11px;line-height:1.7;color:#5b21b6">
+    <b>⚠️ <span data-i18n="note_msg_types">Note on message types:</span></b> <span data-i18n="note_msg_types_desc">The dashboard statistics (attack events, city/zone alerts) count only <code>message_type='alert'</code> messages with <code>is_drill=0</code>. Early warnings (התרעה מקדימה), event-ended (סיום אירוע), and other message types are tracked separately below. This ensures alert counts represent actual siren activations only.</span>
+  </div>
+  <div class="grid g2">
+    <div class="card"><div class="card-h"><h3>📢 <span data-i18n="heads_up_title">Early Warning → Alert Correlation</span></h3></div><div class="card-b" id="vz-heads-up" style="font-size:12px"></div></div>
+    <div class="card"><div class="card-h"><h3>✅ <span data-i18n="event_ended_title">Event Ended — Clearance Analysis</span></h3></div><div class="card-b" id="vz-event-ended" style="font-size:12px"></div></div>
+  </div>
+  <div class="grid g2" style="margin-top:12px">
+    <div class="card"><div class="card-h"><h3>📢 <span data-i18n="hu_timing_title">Heads-Up → Alert Timing</span></h3></div><div class="card-b np"><div id="vz-hu-timing" class="plotly-chart" style="min-height:280px"></div></div></div>
+    <div class="card"><div class="card-h"><h3>✅ <span data-i18n="clearance_monthly_title">Clearance Rate Over Time</span></h3></div><div class="card-b np"><div id="vz-clearance-monthly" class="plotly-chart" style="min-height:280px"></div></div></div>
+  </div>
+</div>
+
+<!-- ===== DATA MODEL ===== -->
+<div class="page" id="page-model">
+  <div class="sec-title"><div class="dot"></div> ERD</div>
+  <div class="card"><div class="card-b" id="erd-box"></div></div>
+  <div class="grid g4" id="model-stats" style="margin-top:12px"></div>
+  <div class="sec-title"><div class="dot" style="background:var(--orange)"></div> ETL: CSV → Database</div>
+  <div class="card"><div class="card-b" id="etl-explain" style="font-size:13px;line-height:2"></div></div>
+  <div class="sec-title"><div class="dot" style="background:var(--cyan)"></div> Calculated Fields & Transformations</div>
+  <div class="card"><div class="card-b" style="font-size:11px">
+    <div style="color:var(--text3);margin-bottom:8px;line-height:1.6">These fields are <b>not</b> in the raw Telegram data — they are computed during the ETL pipeline from <code>raw_text</code> and <code>datetime_utc</code>.</div>
+    <div id="transformations-list"></div>
+  </div></div>
+
+  <div class="sec-title"><div class="dot" style="background:var(--purple)"></div> Alt ERD Designs</div>
+  <div class="grid g3" id="alt-designs"></div>
+  <div class="grid g2" style="margin-top:12px">
+    <div class="card"><div class="card-h"><h3>📊 Data Profile</h3></div><div class="card-b" id="data-profile" style="font-size:12px"></div></div>
+    <div class="card"><div class="card-h"><h3>📋 Views</h3></div><div class="card-b" id="views-list" style="max-height:350px;overflow:auto;font-size:11px"></div></div>
+  </div>
+</div>
+
+<!-- ===== DATA JOURNEY ===== -->
+<div class="page" id="page-journey">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div>
+      <div class="sec-title" style="margin:0"><div class="dot"></div> Data Journey — From Telegram to Dashboard</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Watch real messages flow through each pipeline stage. Each example is randomly selected from the database.</div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="btn" onclick="loadJourney()" id="journey-refresh-btn">🎲 New Examples</button>
+      <button class="btn" id="journey-play-btn" onclick="playAllJourneys()">▶ Play All</button>
+    </div>
+  </div>
+  <div id="journey-examples"></div>
+</div>
+
+<!-- ===== PIPELINE ===== -->
+<div class="page" id="page-pipeline">
+  <!-- Row 1: Actions + Live Log | Stats -->
+  <div class="grid g2">
+    <div>
+      <div class="card"><div class="card-h"><h3>⚡ Pipeline Actions</h3></div><div class="card-b">
+        <div id="pipe-indicator" class="pipe-status idle">● Idle</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn primary" onclick="runPipeline('delta')">▶ Delta</button>
+          <button class="btn" onclick="runPipeline('full_refresh')">⟳ Full Refresh</button>
+          <button class="btn" onclick="runPipeline('rebuild_db')">⚙ Rebuild DB</button>
+          <button class="btn" onclick="runPipeline('validate')">✓ Validate All</button>
+        </div>
+        <div style="margin-top:10px"><div class="log-box" id="pipe-log">Waiting for pipeline action...</div></div>
+      </div></div>
+    </div>
+    <div>
+      <div class="card"><div class="card-h"><h3>📊 Pipeline Stats</h3></div><div class="card-b" id="pipe-stats" style="font-size:12px;line-height:2.2"></div></div>
+    </div>
+  </div>
+
+  <!-- Row 2: Data Versions & Files -->
+  <div class="sec-title" style="margin-top:16px"><div class="dot"></div> Data Versions & Files</div>
+  <div id="versions-container"></div>
+
+  <!-- Row 3: Validation Checks -->
+  <div class="sec-title" style="margin-top:16px"><div class="dot" style="background:var(--green)"></div> Validation Checks</div>
+  <div class="card"><div class="card-h"><h3>✓ Validation Checks</h3>
+    <div style="display:flex;gap:4px;margin-left:auto">
+      <button class="btn primary" onclick="runAllChecks()" style="font-size:10px;padding:4px 10px">▶ Run All</button>
+      <button class="btn" onclick="clearAllChecks()" style="font-size:10px;padding:4px 10px">✕ Clear</button>
+    </div>
+  </div><div class="card-b">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.8">
+      Run individual data integrity checks against the current version. Each check verifies a specific aspect of the pipeline.
+    </div>
+    <div class="grid g3" id="validation-checks" style="gap:8px">
+      <div class="val-check card" data-check="csv_files_exist">
+        <div class="card-b" style="padding:10px 12px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><b style="font-size:12px">📄 CSV Files Exist</b><div style="font-size:10px;color:var(--text3)">All CSVs referenced in metadata are present on disk</div></div>
+            <button class="btn" onclick="runCheck('csv_files_exist',this)" style="font-size:10px;padding:4px 10px">Run</button>
+          </div>
+          <div class="check-result" style="display:none;margin-top:8px;font-size:11px;font-family:'JetBrains Mono';line-height:1.8"></div>
+        </div>
+      </div>
+      <div class="val-check card" data-check="no_duplicate_ids">
+        <div class="card-b" style="padding:10px 12px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><b style="font-size:12px">🔢 No Duplicate IDs</b><div style="font-size:10px;color:var(--text3)">No msg_id appears twice across all CSV files</div></div>
+            <button class="btn" onclick="runCheck('no_duplicate_ids',this)" style="font-size:10px;padding:4px 10px">Run</button>
+          </div>
+          <div class="check-result" style="display:none;margin-top:8px;font-size:11px;font-family:'JetBrains Mono';line-height:1.8"></div>
+        </div>
+      </div>
+      <div class="val-check card" data-check="row_count_match">
+        <div class="card-b" style="padding:10px 12px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><b style="font-size:12px">📏 Row Count Match</b><div style="font-size:10px;color:var(--text3)">CSV row totals match metadata.json counts</div></div>
+            <button class="btn" onclick="runCheck('row_count_match',this)" style="font-size:10px;padding:4px 10px">Run</button>
+          </div>
+          <div class="check-result" style="display:none;margin-top:8px;font-size:11px;font-family:'JetBrains Mono';line-height:1.8"></div>
+        </div>
+      </div>
+      <div class="val-check card" data-check="id_ranges_no_overlap">
+        <div class="card-b" style="padding:10px 12px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><b style="font-size:12px">↔️ ID Ranges No Overlap</b><div style="font-size:10px;color:var(--text3)">Delta ID ranges don't overlap between files</div></div>
+            <button class="btn" onclick="runCheck('id_ranges_no_overlap',this)" style="font-size:10px;padding:4px 10px">Run</button>
+          </div>
+          <div class="check-result" style="display:none;margin-top:8px;font-size:11px;font-family:'JetBrains Mono';line-height:1.8"></div>
+        </div>
+      </div>
+      <div class="val-check card" data-check="db_msg_count">
+        <div class="card-b" style="padding:10px 12px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><b style="font-size:12px">🗄️ DB Message Count</b><div style="font-size:10px;color:var(--text3)">DB row count matches total CSV rows</div></div>
+            <button class="btn" onclick="runCheck('db_msg_count',this)" style="font-size:10px;padding:4px 10px">Run</button>
+          </div>
+          <div class="check-result" style="display:none;margin-top:8px;font-size:11px;font-family:'JetBrains Mono';line-height:1.8"></div>
+        </div>
+      </div>
+      <div class="val-check card" data-check="no_orphan_details">
+        <div class="card-b" style="padding:10px 12px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><b style="font-size:12px">🔗 No Orphan Details</b><div style="font-size:10px;color:var(--text3)">Every alert_detail row references an existing message</div></div>
+            <button class="btn" onclick="runCheck('no_orphan_details',this)" style="font-size:10px;padding:4px 10px">Run</button>
+          </div>
+          <div class="check-result" style="display:none;margin-top:8px;font-size:11px;font-family:'JetBrains Mono';line-height:1.8"></div>
+        </div>
+      </div>
+      <div class="val-check card" data-check="deltas_in_db">
+        <div class="card-b" style="padding:10px 12px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><b style="font-size:12px">✅ Deltas in DB</b><div style="font-size:10px;color:var(--text3)">Every msg_id from every CSV exists in the database</div></div>
+            <button class="btn" onclick="runCheck('deltas_in_db',this)" style="font-size:10px;padding:4px 10px">Run</button>
+          </div>
+          <div class="check-result" style="display:none;margin-top:8px;font-size:11px;font-family:'JetBrains Mono';line-height:1.8"></div>
+        </div>
+      </div>
+      <div class="val-check card" data-check="db_version_match">
+        <div class="card-b" style="padding:10px 12px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><b style="font-size:12px">🏷️ DB Version Match</b><div style="font-size:10px;color:var(--text3)">DB was built from the current data version</div></div>
+            <button class="btn" onclick="runCheck('db_version_match',this)" style="font-size:10px;padding:4px 10px">Run</button>
+          </div>
+          <div class="check-result" style="display:none;margin-top:8px;font-size:11px;font-family:'JetBrains Mono';line-height:1.8"></div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+
+  <!-- Row 3.5: Random Sample Check -->
+  <div class="sec-title" style="margin-top:16px"><div class="dot" style="background:var(--purple)"></div> Data Audit — Random Sample</div>
+  <div class="card"><div class="card-h"><h3>🔬 Random Message Audit</h3>
+    <button class="btn primary" onclick="runSampleCheck()" style="font-size:10px;padding:4px 12px;margin-left:auto">🎲 Sample Random Message</button>
+    <button class="btn" onclick="validateSample()" id="validate-sample-btn" style="font-size:10px;padding:4px 12px;display:none">✓ Validate This Sample</button>
+  </div><div class="card-b">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
+      Picks a random alert from the DB, shows its raw Telegram text, traces it back to its source CSV, and displays how it was parsed into the database. Use this to spot-check pipeline accuracy.
+    </div>
+    <div id="sample-check-result" style="font-size:11px">Click "Sample Random Message" to audit a random record.</div>
+  </div></div>
+
+  <!-- Row 4: Logs -->
+  <!-- Row 3.7: SQL Performance -->
+  <div class="sec-title" style="margin-top:16px"><div class="dot" style="background:var(--cyan)"></div> SQL Query Performance</div>
+  <div class="card"><div class="card-h"><h3>⚡ SQL Latency Monitor</h3>
+    <button class="btn" onclick="loadSqlLatency()" style="font-size:10px;padding:4px 10px">🔄 Refresh</button>
+  </div><div class="card-b" id="sql-latency-content" style="font-size:11px">
+    <div style="color:var(--text3)">Click Refresh to load SQL performance data. Queries are logged as they execute.</div>
+  </div></div>
+
+  <div class="sec-title" style="margin-top:16px"><div class="dot" style="background:var(--orange)"></div> Pipeline Logs</div>
+  <div class="grid g2">
+    <div class="card"><div class="card-h"><h3>📁 Log Files</h3></div><div class="card-b np" style="max-height:300px;overflow:auto"><ul class="file-list" id="log-list"></ul></div></div>
+    <div class="card"><div class="card-h"><h3>📜 Log Viewer</h3><span id="log-name" style="font-size:10px;color:var(--text3);margin-left:8px"></span></div><div class="card-b"><div class="log-box" id="log-content" style="max-height:400px">Select a log file...</div></div></div>
+  </div>
+</div>
+
+<!-- ===== TABLEAU READY ===== -->
+<div class="page" id="page-tableau">
+  <div class="sec-title"><div class="dot" style="background:var(--blue)"></div> Export Data for Tableau / Salesforce Data Cloud</div>
+  <div class="card"><div class="card-h"><h3>📦 Download Data Streams</h3></div><div class="card-b">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.8">
+      Export the complete database as CSV files ready to load into Tableau, Salesforce Data Cloud, or any BI tool.
+      Each table becomes one data stream. The ZIP includes a <code>manifest.json</code> with table schemas, relationships, field descriptions, and Tableau calculated field formulas.
+    </div>
+    <div class="grid g2" style="gap:12px">
+      <div class="card" style="border-top:3px solid var(--green)"><div class="card-b" style="padding:14px">
+        <div style="font-weight:800;font-size:14px;color:var(--green);margin-bottom:6px">Full Export (Recommended)</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6">All columns including pre-computed fields: <code>datetime_israel</code>, <code>message_type</code>, <code>alert_type</code>, <code>is_drill</code>, <code>canonical_name</code>, etc. Load directly into any BI tool and start building visualizations immediately.</div>
+        <a href="/api/export/full" class="btn primary" style="text-decoration:none;display:inline-block;font-size:13px;padding:8px 16px">Download Full Export</a>
+      </div></div>
+      <div class="card" style="border-top:3px solid var(--orange)"><div class="card-b" style="padding:14px">
+        <div style="font-weight:800;font-size:14px;color:var(--orange);margin-bottom:6px">Raw + Formulas (For Data Pipelines)</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6">Raw columns only (no calculated fields). The manifest includes tested Tableau formulas so you can recreate calculated fields in your semantic model. Best for recurring data refreshes.</div>
+        <a href="/api/export/raw" class="btn" style="text-decoration:none;display:inline-block;font-size:13px;padding:8px 16px">Download Raw + Formulas</a>
+      </div></div>
+    </div>
+  </div></div>
+
+  <div class="sec-title" style="margin-top:16px"><div class="dot" style="background:var(--purple)"></div> Data Model (Star Schema)</div>
+  <div class="card"><div class="card-b" style="padding:16px">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
+      The export uses a star schema with <strong>alert_details</strong> as the central fact table and three dimension tables.
+    </div>
+    <div style="background:var(--bg2);border-radius:8px;padding:16px;font-family:monospace;font-size:11px;line-height:1.8;color:var(--text2)">
+      <div style="text-align:center;margin-bottom:8px;font-weight:800;color:var(--text1)">Star Schema</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+        <div style="background:var(--bg1);padding:8px;border-radius:6px;border:1px solid var(--border)">
+          <div style="font-weight:700;color:var(--blue)">messages</div>
+          <div style="font-size:9px;color:var(--text3)">PK: msg_id</div>
+          <div style="font-size:9px;color:var(--text3)">datetime_utc, raw_text, views</div>
+        </div>
+        <div style="background:var(--bg1);padding:8px;border-radius:6px;border:2px solid var(--purple)">
+          <div style="font-weight:700;color:var(--purple)">alert_details (FACT)</div>
+          <div style="font-size:9px;color:var(--text3)">PK: id</div>
+          <div style="font-size:9px;color:var(--text3)">msg_id, zone_id, city_id, shelter_time</div>
+        </div>
+        <div style="background:var(--bg1);padding:8px;border-radius:6px;border:1px solid var(--border)">
+          <div style="font-weight:700;color:var(--green)">cities</div>
+          <div style="font-size:9px;color:var(--text3)">PK: city_id</div>
+          <div style="font-size:9px;color:var(--text3)">city_name, canonical_name</div>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:4px">
+        <div style="background:var(--bg1);padding:8px;border-radius:6px;border:1px solid var(--border);display:inline-block;min-width:150px">
+          <div style="font-weight:700;color:var(--orange)">zones</div>
+          <div style="font-size:9px;color:var(--text3)">PK: zone_id | zone_name</div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="sec-title" style="margin-top:16px"><div class="dot" style="background:var(--green)"></div> Calculated Fields Reference</div>
+  <div class="card"><div class="card-b" style="padding:16px">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
+      When using the <strong>Raw + Formulas</strong> export, create these calculated fields in your BI tool. The Full Export includes these pre-computed.
+    </div>
+    <div id="tableau-calc-fields" style="font-size:11px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="border-bottom:2px solid var(--border);text-align:left">
+          <th style="padding:6px">Field</th><th style="padding:6px">Table</th><th style="padding:6px">Description</th><th style="padding:6px">Type</th>
+        </tr></thead>
+        <tbody style="color:var(--text2)">
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>message_type</code></td><td style="padding:6px">messages</td><td style="padding:6px">Classification: alert, event_ended, heads_up, update, other</td><td style="padding:6px">Text</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>alert_type</code></td><td style="padding:6px">messages</td><td style="padding:6px">Threat: rockets, aircraft, infiltration, earthquake, hazmat</td><td style="padding:6px">Text</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>is_drill</code></td><td style="padding:6px">messages</td><td style="padding:6px">1 if drill/test, 0 if real</td><td style="padding:6px">Number</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>datetime_israel</code></td><td style="padding:6px">messages</td><td style="padding:6px">Israel local time (UTC + 2/3h by season)</td><td style="padding:6px">DateTime</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>alert_date</code></td><td style="padding:6px">messages</td><td style="padding:6px">Date from alert text (ground truth Israel date)</td><td style="padding:6px">Text</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>canonical_name</code></td><td style="padding:6px">cities</td><td style="padding:6px">Normalized name (dash to space unification)</td><td style="padding:6px">Text</td></tr>
+          <tr><td style="padding:6px"><code>Is Real Alert</code></td><td style="padding:6px">cross-table</td><td style="padding:6px">message_type = "alert" AND is_drill = 0</td><td style="padding:6px">Boolean</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:10px">
+      Full formulas and Tableau Next syntax are in the <code>manifest.json</code> inside each export ZIP. See TABLEAU_GUIDE.md for the complete deployment guide.
+    </div>
+  </div></div>
+
+  <div class="sec-title" style="margin-top:16px"><div class="dot" style="background:var(--cyan)"></div> Quick Start Guide</div>
+  <div class="card"><div class="card-b" style="padding:16px;font-size:12px;color:var(--text2);line-height:2">
+    <div style="font-weight:700;margin-bottom:8px;color:var(--text1)">Load into Tableau / Any BI Tool:</div>
+    <ol style="margin:0;padding-left:20px">
+      <li>Download the <strong>Full Export</strong> above</li>
+      <li>Unzip — you'll find 4 CSV files + manifest.json</li>
+      <li>Load each CSV as a data source / data stream</li>
+      <li>Set relationships: <code>alert_details.msg_id &rarr; messages.msg_id</code>, <code>alert_details.city_id &rarr; cities.city_id</code>, <code>alert_details.zone_id &rarr; zones.zone_id</code></li>
+      <li>Filter to real alerts: <code>message_type = "alert" AND is_drill = 0</code></li>
+      <li>Start visualizing! Group by city, zone, date, alert_type</li>
+    </ol>
+    <div style="font-weight:700;margin-top:16px;margin-bottom:8px;color:var(--text1)">For Salesforce Data Cloud + Tableau Next:</div>
+    <ol style="margin:0;padding-left:20px">
+      <li>Download the <strong>Raw + Formulas</strong> export</li>
+      <li>Create 4 Data Streams (messages, alert_details, cities, zones)</li>
+      <li>Create DMOs from each stream</li>
+      <li>Build semantic model with star schema relationships</li>
+      <li>Create calculated fields using formulas from manifest.json</li>
+      <li>See <code>TABLEAU_GUIDE.md</code> for detailed walkthrough with tested formulas</li>
+    </ol>
+  </div></div>
+</div>
+
+<!-- ===== SQL ===== -->
+<div class="page" id="page-query">
+  <div class="card"><div class="card-h"><h3>🔍 SQL</h3>
+    <div style="display:flex;gap:4px;flex-wrap:wrap">
+      <button class="btn" onclick="sq('top')">Cities</button><button class="btn" onclick="sq('oct7')">Oct7</button>
+      <button class="btn" onclick="sq('zones')">Zones</button><button class="btn" onclick="sq('streaks')">Streaks</button>
+      <button class="btn" onclick="sq('safest')">Safest</button><button class="btn" onclick="sq('latest')">Latest</button>
+    </div></div>
+    <div class="card-b">
+      <div class="sql-wrap"><textarea id="sql-editor"></textarea></div>
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+        <button class="btn primary" onclick="runQ()">▶ Run</button>
+        <span id="q-status" style="font-size:11px;color:var(--text3)"></span>
+      </div>
+      <div class="qr" id="q-result"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const I18N={
+  en:{
+    title:'PIKUD HAOREF COMMAND CENTER',
+    tab_overview:'📊 Overview',tab_intel:'📈 Intelligence',tab_model:'🗄️ Data Model',tab_journey:'🔄 Data Journey',tab_pipeline:'⚡ Pipeline',tab_sql:'🔍 SQL',
+    period:'Period',filters:'Filters',all_types:'All types',search_zone:'Search zone...',search_city:'Search city...',clear:'Clear',
+    active_filters:'ACTIVE FILTERS:',
+    attack_events:'ATTACK EVENTS',city_alerts:'CITY-LEVEL ALERTS',zone_alerts:'ZONE-LEVEL ALERTS',cities:'CITIES',peak_day:'PEAK DAY',data_range:'DATA RANGE',
+    last_alert:'LAST ALERT',
+    threat_analysis:'Threat Analysis',geographic:'Geographic Intel',civilian:'Civilian Intel',advanced:'Advanced',
+    early_warning_section:'Early Warning & Event Lifecycle',
+    note_msg_types:'Note on message types:',
+    note_msg_types_desc:'The dashboard statistics (attack events, city/zone alerts) count only message_type=\'alert\' messages with is_drill=0. Early warnings (התרעה מקדימה), event-ended (סיום אירוע), and other message types are tracked separately below.',
+    heads_up_title:'Early Warning → Alert Correlation',event_ended_title:'Event Ended — Clearance Analysis',
+    hu_timing_title:'Heads-Up → Alert Timing',clearance_monthly_title:'Clearance Rate Over Time',
+    new_examples:'🎲 New Examples',play_all:'▶ Play All',
+    run_all:'▶ Run All',clear_all:'✕ Clear',
+  },
+  he:{
+    title:'מרכז פיקוד — פיקוד העורף',
+    tab_overview:'📊 סקירה',tab_intel:'📈 מודיעין',tab_model:'🗄️ מודל נתונים',tab_journey:'🔄 מסע הנתון',tab_pipeline:'⚡ צינור',tab_sql:'🔍 SQL',
+    period:'תקופה',filters:'סינון',all_types:'כל הסוגים',search_zone:'חפש אזור...',search_city:'חפש עיר...',clear:'נקה',
+    active_filters:'סינון פעיל:',
+    attack_events:'אירועי תקיפה',city_alerts:'התרעות ברמת עיר',zone_alerts:'התרעות ברמת אזור',cities:'ערים',peak_day:'יום שיא',data_range:'טווח נתונים',
+    last_alert:'התרעה אחרונה',
+    threat_analysis:'ניתוח איומים',geographic:'מודיעין גיאוגרפי',civilian:'מודיעין אזרחי',advanced:'מתקדם',
+    early_warning_section:'התרעה מקדימה ומחזור חיי אירוע',
+    note_msg_types:'הערה על סוגי הודעות:',
+    note_msg_types_desc:'סטטיסטיקות הדשבורד (אירועי תקיפה, התרעות עיר/אזור) סופרות רק הודעות מסוג alert שאינן תרגיל. התרעות מקדימות, סיום אירוע וסוגי הודעות נוספים מוצגים בנפרד למטה.',
+    heads_up_title:'התרעה מקדימה → מתאם עם התרעה',event_ended_title:'סיום אירוע — ניתוח זמני פינוי',
+    hu_timing_title:'זמן מהתרעה מקדימה להתרעה',clearance_monthly_title:'אחוז פינוי לאורך זמן',
+    new_examples:'🎲 דוגמאות חדשות',play_all:'▶ הפעל הכל',
+    run_all:'▶ הפעל הכל',clear_all:'✕ נקה',
+  }
+};
+let LANG='en';function t(k){return(I18N[LANG]||{})[k]||k;}
+function toggleLang(){
+  LANG=LANG==='en'?'he':'en';
+  document.body.classList.toggle('rtl',LANG==='he');
+  document.getElementById('h-title').textContent=t('title');
+  // Tabs
+  const tabKeys=['overview','intel','model','journey','pipeline','sql'];
+  document.querySelectorAll('.tab').forEach((tb,i)=>{if(tabKeys[i])tb.textContent=t('tab_'+tabKeys[i]);});
+  // Filter bar
+  document.querySelector('#filter-bar > span').textContent=t('filters');
+  document.querySelector('.pf-bar > span').textContent=t('period');
+  const atSel=document.getElementById('filter-alert-type');
+  if(atSel.options[0])atSel.options[0].text=t('all_types');
+  document.getElementById('filter-zone').placeholder=t('search_zone');
+  document.getElementById('filter-city').placeholder=t('search_city');
+  // data-i18n elements
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key=el.dataset.i18n;
+    const val=t(key);
+    if(val!==key)el.textContent=val;
+  });
+  refreshAll();
+}
+
+const PL={paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{color:'#4b5178',size:11,family:'Inter'},margin:{t:20,r:12,b:40,l:48},xaxis:{gridcolor:'#e4e8f4',zerolinecolor:'#e4e8f4'},yaxis:{gridcolor:'#e4e8f4',zerolinecolor:'#e4e8f4'},legend:{bgcolor:'rgba(0,0,0,0)',font:{size:11},orientation:'h',y:1.1},hoverlabel:{bgcolor:'#fff',bordercolor:'#4f46e5',font:{size:12,family:'Inter'}}};
+const PC={responsive:true,displayModeBar:false};
+function ml(x){return{...PL,...x,xaxis:{...PL.xaxis,...(x.xaxis||{})},yaxis:{...PL.yaxis,...(x.yaxis||{})}}}
+const api=async(u,o)=>(await fetch(u,o)).json();
+const C=['#dc2626','#2563eb','#d97706','#16a34a','#db2777','#0891b2','#7c3aed','#ea580c','#4f46e5','#10b981'];
+
+// LOADING
+function showLoad(msg){document.getElementById('load-txt').textContent=msg||'Loading...';document.getElementById('loading').classList.add('show');}
+function hideLoad(){document.getElementById('loading').classList.remove('show');}
+
+// PREFILTERS
+let activeFilter={date_from:null,date_to:null,alert_type:null,zone:null,city:null};let prefilterData=[];
+let filterOptions={cities:[],zones:[],alert_types:[]};
+async function loadPrefilters(){
+  prefilterData=await api('/api/prefilters');
+  renderPF();
+}
+function renderPF(){
+  const bar=document.getElementById('pf-bar');
+  bar.innerHTML='<span style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Period</span>';
+  prefilterData.forEach((pf,i)=>{
+    const btn=document.createElement('button');
+    btn.className='pf-btn'+(i===0?' active':'');
+    btn.innerHTML=pf.icon+' '+(LANG==='he'?pf.name_he:pf.name_en);
+    btn.onclick=()=>{
+      document.querySelectorAll('.pf-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
+      activeFilter.date_from=pf.date_from;activeFilter.date_to=pf.date_to;
+      updatePFInfo();refreshAll();
+    };
+    bar.appendChild(btn);
+  });
+  // Date info label
+  const info=document.createElement('span');info.className='pf-info';info.id='pf-info-label';info.textContent='All data';
+  bar.appendChild(info);
+}
+function updatePFInfo(){
+  const el=document.getElementById('pf-info-label');
+  if(!activeFilter.date_from&&!activeFilter.date_to){el.textContent='All data';}
+  else{const f=activeFilter.date_from||'start';const t=activeFilter.date_to||'ongoing';el.textContent=`${f} 00:00 → ${t==='ongoing'?'now':t+' 23:59'} IST`;}
+  updateFilterBanner();
+}
+function getQ(){
+  const p=new URLSearchParams();
+  if(activeFilter.date_from)p.set('date_from',activeFilter.date_from);
+  if(activeFilter.date_to)p.set('date_to',activeFilter.date_to);
+  if(activeFilter.alert_type)p.set('alert_type',activeFilter.alert_type);
+  if(activeFilter.zone)p.set('zone',activeFilter.zone);
+  if(activeFilter.city)p.set('city',activeFilter.city);
+  return p.toString()?'?'+p.toString():'';
+}
+function getQA(){const s=getQ();return s?s.replace('?','&'):'';}
+
+// Dynamic filters
+async function loadFilterOptions(){
+  filterOptions=await api('/api/filter_options');
+  const sel=document.getElementById('filter-alert-type');
+  sel.innerHTML='<option value="">All types</option>'+filterOptions.alert_types.map(t=>`<option value="${t}">${t}</option>`).join('');
+}
+function showAutocomplete(type){
+  const input=document.getElementById('filter-'+type);
+  const list=document.getElementById('ac-'+type);
+  const val=input.value.trim().toLowerCase();
+  const items=type==='city'?filterOptions.cities:filterOptions.zones;
+  const filtered=val?items.filter(i=>i.toLowerCase().includes(val)).slice(0,30):items.slice(0,30);
+  if(!filtered.length){list.classList.remove('show');return;}
+  list.innerHTML=filtered.map(i=>`<div onclick="selectFilter('${type}','${i.replace(/'/g,"\\'")}')">${i}</div>`).join('');
+  list.classList.add('show');
+}
+function selectFilter(type,val){
+  document.getElementById('filter-'+type).value=val;
+  document.getElementById('ac-'+type).classList.remove('show');
+  applyDynFilter();
+}
+function applyDynFilter(){
+  activeFilter.alert_type=document.getElementById('filter-alert-type').value||null;
+  activeFilter.zone=document.getElementById('filter-zone').value||null;
+  activeFilter.city=document.getElementById('filter-city').value||null;
+  updateFilterBanner();
+  refreshAll();
+}
+function clearDynFilters(){
+  activeFilter.alert_type=null;activeFilter.zone=null;activeFilter.city=null;
+  document.getElementById('filter-alert-type').value='';
+  document.getElementById('filter-zone').value='';
+  document.getElementById('filter-city').value='';
+  updateFilterBanner();
+  refreshAll();
+}
+function updateFilterBanner(){
+  const banner=document.getElementById('active-filter-banner');
+  const tags=document.getElementById('active-filter-tags');
+  const parts=[];
+  if(activeFilter.date_from||activeFilter.date_to){
+    const f=activeFilter.date_from||'start';const to=activeFilter.date_to||'now';
+    parts.push({label:`Period: ${f} → ${to}`,key:'date'});
+  }
+  if(activeFilter.alert_type)parts.push({label:`Type: ${activeFilter.alert_type}`,key:'alert_type'});
+  if(activeFilter.zone)parts.push({label:`Zone: ${activeFilter.zone}`,key:'zone'});
+  if(activeFilter.city)parts.push({label:`City: ${activeFilter.city}`,key:'city'});
+  if(!parts.length){banner.classList.remove('show');return;}
+  banner.classList.add('show');
+  tags.innerHTML=parts.map(p=>`<span class="filter-tag">${p.label} <span class="x" onclick="removeFilter('${p.key}')">×</span></span>`).join('');
+}
+function removeFilter(key){
+  if(key==='date'){activeFilter.date_from=null;activeFilter.date_to=null;document.querySelectorAll('.pf-btn').forEach((b,i)=>{if(i===0)b.classList.add('active');else b.classList.remove('active');});}
+  if(key==='alert_type'){activeFilter.alert_type=null;document.getElementById('filter-alert-type').value='';}
+  if(key==='zone'){activeFilter.zone=null;document.getElementById('filter-zone').value='';}
+  if(key==='city'){activeFilter.city=null;document.getElementById('filter-city').value='';}
+  updateFilterBanner();refreshAll();
+}
+// Close autocomplete on click outside
+document.addEventListener('click',e=>{if(!e.target.closest('.filter-group')){document.querySelectorAll('.autocomplete-list').forEach(l=>l.classList.remove('show'));}});
+
+// TABS
+document.querySelectorAll('.tab').forEach(tb=>tb.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  tb.classList.add('active');document.getElementById('page-'+tb.dataset.page).classList.add('active');
+  if(tb.dataset.page==='model')loadModel();if(tb.dataset.page==='journey')loadJourney();if(tb.dataset.page==='pipeline'){loadPipeStats();loadVersions();loadLogs();}
+}));
+
+async function refreshAll(){showLoad('Loading data...');try{await Promise.all([loadOverview(),loadViz()]);}finally{hideLoad();}}
+
+// ===== OVERVIEW =====
+let statSqlMeta={};
+async function loadOverview(){
+  const q=getQ();
+  const [s,fc,daily,cities,hourly,ssql]=await Promise.all([api('/api/stats'),api('/api/filtered_counts'+q),api('/api/viz/daily'+q),api('/api/viz/top_cities?limit=12'+getQA()),api('/api/viz/hourly'+q),api('/api/stat_sql')]);
+  if(s.error)return;
+  statSqlMeta=ssql;
+  document.getElementById('hdr-ver').textContent='v'+s.version;
+  document.getElementById('hdr-cnt').textContent=fc.attack_events?.toLocaleString()+' attacks';
+  // Ticker: Last Alert with zones & cities
+  if(s.latest_alert){
+    const la=s.latest_alert;
+    const statusBadge=s.latest_message?.type==='event_ended'?'<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:6px;font-weight:800;font-size:10px">✅ Clear</span>':'<span style="background:#fef2f2;color:#991b1b;padding:2px 8px;border-radius:6px;font-weight:800;font-size:10px">⚠️ Active</span>';
+    const typeLabel=(la.alert_type||'alert').charAt(0).toUpperCase()+(la.alert_type||'alert').slice(1);
+    document.getElementById('ticker').innerHTML=`<div class="ticker">
+      <span class="siren">🚨</span>
+      <span style="font-weight:900;font-size:11px;color:var(--text);white-space:nowrap">${t('last_alert')}</span>
+      <span class="time">${la.datetime_israel} IST</span>
+      <span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800">${typeLabel}</span>
+      <span style="font-weight:700;color:var(--text);font-size:11px" title="${la.zones||''}">${la.zones||''}</span>
+      <span style="color:var(--text2);font-size:10px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl" title="${la.cities||''}">${la.cities||''}</span>
+      ${statusBadge}
+    </div>`;
+  }
+  function tip(key){
+    const m=statSqlMeta[key];
+    if(!m)return'';
+    return `${m.note}\n\n📊 SQL:\n${m.sql}`;
+  }
+  const avgMsgsPerEvent=fc.attack_events?(fc.msg_alerts/fc.attack_events).toFixed(1):'—';
+  document.getElementById('stat-cards').innerHTML=`
+    <div class="stat red"><div class="lb">${t('attack_events')}</div><div class="val">${fc.attack_events?.toLocaleString()}</div><div class="sub" data-tip="${tip('attack_events')}">~${avgMsgsPerEvent} msgs/event</div><div class="big-icon">💥</div></div>
+    <div class="stat orange" style="cursor:pointer" onclick="openDrilldown()"><div class="lb">${t('city_alerts')}</div><div class="val">${fc.city_alerts?.toLocaleString()}</div><div class="sub" data-tip="${tip('city_alerts')}">in ${fc.msg_alerts?.toLocaleString()} messages · <b style="color:var(--accent)">click to drill down ↗</b></div><div class="big-icon">🏙️</div></div>
+    <div class="stat blue"><div class="lb">${t('zone_alerts')}</div><div class="val">${fc.zone_alerts?.toLocaleString()}</div><div class="sub" data-tip="${tip('zone_alerts')}">1 zone in 1 msg = 1 count</div><div class="big-icon">🗺️</div></div>
+    <div class="stat cyan"><div class="lb">${t('cities')}</div><div class="val">${s.total_cities?.toLocaleString()}</div><div class="sub" data-tip="${tip('total_cities')}">${s.total_zones} zones</div><div class="big-icon">📍</div></div>
+    <div class="stat purple"><div class="lb">${t('peak_day')}</div><div class="val">${s.busiest_day?.count?.toLocaleString()||'-'}</div><div class="sub" data-tip="${tip('busiest_day')}">${s.busiest_day?.date||''}</div><div class="big-icon">🔥</div></div>
+    <div class="stat green"><div class="lb">${t('data_range')}</div><div class="val" style="font-size:13px;line-height:1.4">${(fc.first||'').slice(0,16)}<br>${(fc.last||'').slice(0,16)}</div><div class="sub">Israel time</div><div class="big-icon">📅</div></div>`;
+
+  Plotly.newPlot('ov-daily',[{x:daily.map(d=>d.date),y:daily.map(d=>d.rockets),name:'Rockets',type:'bar',marker:{color:'#dc2626'}},{x:daily.map(d=>d.date),y:daily.map(d=>d.aircraft),name:'Aircraft',type:'bar',marker:{color:'#2563eb'}}],ml({barmode:'stack',margin:{t:8,b:30,l:40,r:8}}),PC);
+  window._ovCities=cities;
+  plotCities(cities,'desc');
+}
+function plotCities(cities,order){
+  const sorted=[...cities].sort((a,b)=>order==='asc'?a.alert_count-b.alert_count:b.alert_count-a.alert_count);
+  Plotly.newPlot('ov-cities',[{x:sorted.map(c=>c.alert_count),y:sorted.map(c=>c.city_name),type:'bar',orientation:'h',marker:{color:sorted.map(c=>c.rocket_count>c.aircraft_count?'#dc2626':'#2563eb'),cornerradius:3},text:sorted.map(c=>c.alert_count),textposition:'outside',textfont:{size:11}}],ml({margin:{l:130,r:40},yaxis:{autorange:'reversed',tickfont:{size:12}}}),PC);
+  Plotly.newPlot('ov-hourly',[{x:hourly.map(h=>`${String(h.hour_israel).padStart(2,'0')}:00`),y:hourly.map(h=>h.total),type:'bar',marker:{color:hourly.map(h=>h.total>800?'#dc2626':h.total>500?'#f59e0b':h.total>300?'#6366f1':'#22c55e'),cornerradius:3},text:hourly.map(h=>h.total),textposition:'outside',textfont:{size:9}}],ml({margin:{t:8,b:30,l:36,r:8}}),PC);
+}
+
+// ===== INTELLIGENCE =====
+const dowN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const shelterMap={'מיידי':'⚡ Now','15 שניות':'15s','30 שניות':'30s','45 שניות':'45s','דקה':'1m','דקה וחצי':'1.5m','3 דקות':'3m'};
+
+let vizMeta={};
+async function loadViz(){
+  const q=getQ(),qa=getQA();
+  const [daily,monthly,cities,zones,shelter,dow,esc,mz,rt,st,s10,drones,anom,vmeta]=await Promise.all([
+    api('/api/viz/daily'+q),api('/api/viz/monthly'+q),api('/api/viz/top_cities?limit=25'+qa),api('/api/viz/zones'+q),
+    api('/api/viz/shelter_times'+q),api('/api/viz/dow'+q),api('/api/viz/escalation'+q),
+    api('/api/viz/multi_zone'+q),api('/api/viz/response_time'),api('/api/viz/streaks'),
+    api('/api/viz/safest_10min'+q),api('/api/viz/drone_cities'+q),api('/api/viz/city_zone_anomaly'+q),api('/api/viz/meta')]);
+  vizMeta=vmeta;
+  // Inject viz metadata info icons into card headers
+  function injectMeta(vizKey){
+    const m=vizMeta[vizKey];if(!m)return;
+    const tip=`📊 ${m.title}\n\nDimensions: ${m.dimensions.join(', ')}\nMeasures: ${m.measures.join(', ')}\nTime: ${m.time}\nFields: ${m.fields.join(', ')}\n\nSQL:\n${m.sql}`;
+    return tip;
+  }
+  document.querySelectorAll('[data-viz-meta]').forEach(el=>{
+    const key=el.dataset.vizMeta;
+    const tip=injectMeta(key);
+    if(tip)el.setAttribute('data-tip',tip);
+  });
+
+  Plotly.newPlot('vz-daily',[{x:daily.map(d=>d.date),y:daily.map(d=>d.total),type:'bar',marker:{color:daily.map(d=>d.total),colorscale:[[0,'#e4e8f4'],[0.1,'#818cf8'],[0.4,'#f59e0b'],[1,'#7f1d1d']],cornerradius:1},hovertemplate:'<b>%{x}</b><br>%{y} alert msgs<extra></extra>'}],ml({}),PC);
+  Plotly.newPlot('vz-monthly',[{x:monthly.map(m=>m.month),y:monthly.map(m=>m.rockets),name:'Rockets',type:'bar',marker:{color:'#dc2626'}},{x:monthly.map(m=>m.month),y:monthly.map(m=>m.aircraft),name:'Aircraft',type:'bar',marker:{color:'#2563eb'}}],ml({barmode:'stack'}),PC);
+  Plotly.newPlot('vz-cities',[{y:cities.map(c=>c.city_name),x:cities.map(c=>c.rocket_count),name:'Rockets',type:'bar',orientation:'h',marker:{color:'#dc2626'}},{y:cities.map(c=>c.city_name),x:cities.map(c=>c.aircraft_count),name:'Aircraft',type:'bar',orientation:'h',marker:{color:'#2563eb'}}],ml({barmode:'stack',margin:{l:150},yaxis:{autorange:'reversed',tickfont:{size:12}}}),PC);
+  Plotly.newPlot('vz-zones',[{type:'treemap',labels:zones.map(z=>z.zone_name.replace('אזור ','')),parents:zones.map(()=>''),values:zones.map(z=>z.alert_count),textinfo:'label+value',marker:{colors:zones.map((_,i)=>C[i%C.length]),line:{width:2,color:'#fff'}},textfont:{size:13},hovertemplate:'<b>%{label}</b><br>%{value} zone-alerts<extra></extra>'}],ml({margin:{t:4,b:4,l:4,r:4}}),PC);
+  Plotly.newPlot('vz-drones',[{y:drones.map(d=>d.city_name),x:drones.map(d=>d.drone_alerts),type:'bar',orientation:'h',marker:{color:'#2563eb',cornerradius:3},text:drones.map(d=>d.drone_alerts),textposition:'outside',textfont:{size:11}}],ml({margin:{l:150},yaxis:{autorange:'reversed',tickfont:{size:12}}}),PC);
+  Plotly.newPlot('vz-anomaly',[{x:anom.map(a=>a.zone_avg),y:anom.map(a=>a.city_alerts),mode:'markers+text',text:anom.slice(0,12).map(a=>a.city_name).concat(anom.slice(12).map(()=>'')),textposition:'top center',textfont:{size:9},marker:{size:anom.map(a=>Math.max(6,Math.sqrt(a.city_alerts)*1.8)),color:anom.map(a=>a.ratio),colorscale:[[0,'#22c55e'],[0.5,'#f59e0b'],[1,'#dc2626']],line:{width:1,color:'#fff'}},type:'scatter',hovertemplate:'<b>%{text}</b><br>City: %{y}<br>Zone avg: %{x}<extra></extra>'}],ml({xaxis:{title:'Zone Avg'},yaxis:{title:'City Alerts'}}),PC);
+
+  // Safest 10-min windows — top 15 safest + top 5 most dangerous
+  const safest=s10.slice(0,15);const danger=s10.slice(-5).reverse();
+  const all=[...safest,...danger];
+  Plotly.newPlot('vz-shower10',[{type:'bar',x:all.map(s=>s.slot),y:all.map(s=>s.alerts),marker:{color:all.map((_,i)=>i<15?'#22c55e':'#dc2626'),cornerradius:4},text:all.map(s=>s.alerts),textposition:'outside',textfont:{size:10},hovertemplate:'%{x} IST<br>%{y} alerts<extra></extra>'}],ml({xaxis:{tickangle:-45,tickfont:{size:9}},yaxis:{title:'Alerts'},annotations:[{text:'🚿 GREEN = Safest 10-min slots',xref:'paper',yref:'paper',x:0.3,y:1.06,showarrow:false,font:{size:11,color:'#16a34a'}},{text:'🔴 RED = Most dangerous',xref:'paper',yref:'paper',x:0.85,y:1.06,showarrow:false,font:{size:11,color:'#dc2626'}}],margin:{b:70}}),PC);
+
+  const dd=dow.map(d=>d.total);dd.push(dd[0]);const dl=[...dowN,dowN[0]];
+  Plotly.newPlot('vz-dow',[{type:'scatterpolar',r:dd,theta:dl,fill:'toself',fillcolor:'rgba(79,70,229,0.1)',line:{color:'#4f46e5',width:3},marker:{size:7,color:'#4f46e5'}}],ml({polar:{radialaxis:{visible:true,gridcolor:'#e4e8f4'},angularaxis:{gridcolor:'#e4e8f4',tickfont:{size:13}}},margin:{t:30,b:30}}),PC);
+  Plotly.newPlot('vz-shelter',[{x:shelter.map(s=>shelterMap[s.shelter_time]||s.shelter_time),y:shelter.map(s=>s.count),type:'bar',marker:{color:shelter.map((_,i)=>C[i%C.length]),cornerradius:6},text:shelter.map(s=>s.count.toLocaleString()),textposition:'outside',textfont:{size:11}}],ml({}),PC);
+  Plotly.newPlot('vz-escalation',[{x:esc.map(e=>e.hour),y:esc.map(e=>e.date),z:esc.map(e=>e.count),type:'heatmap',colorscale:[[0,'#f0f2f9'],[0.15,'#818cf8'],[0.4,'#f59e0b'],[1,'#dc2626']],hovertemplate:'%{y}<br>%{x}:00<br><b>%{z} alerts</b><extra></extra>'}],ml({xaxis:{title:'Hour (IST)',dtick:2},margin:{l:90}}),PC);
+  Plotly.newPlot('vz-multizone',[{x:mz.map(m=>m.zone_count),y:mz.map(m=>m.city_count),mode:'markers',text:mz.map(m=>m.datetime_israel?.slice(0,16)),marker:{size:mz.map(m=>Math.max(6,m.city_count/1.5)),color:mz.map(m=>m.zone_count),colorscale:[[0,'#818cf8'],[1,'#dc2626']],line:{width:1,color:'#fff'}},type:'scatter',hovertemplate:'<b>%{text}</b><br>%{x} zones · %{y} cities<extra></extra>'}],ml({xaxis:{title:'Zones',dtick:1},yaxis:{title:'Cities'}}),PC);
+
+  document.getElementById('vz-response').innerHTML=rt.length?`<table><thead><tr><th>Threat</th><th>Total Msgs</th><th>With Clear</th><th style="color:var(--accent)">Avg Min</th><th>Min</th><th>Max</th></tr></thead><tbody>${rt.map(r=>`<tr><td style="font-weight:800">${r.alert_type}</td><td>${r.total.toLocaleString()}</td><td>${r.with_clearance.toLocaleString()} (${Math.round(100*r.with_clearance/r.total)}%)</td><td style="color:var(--accent);font-weight:900;font-size:15px">${r.avg_minutes||'—'}</td><td>${r.min_minutes||'—'}</td><td>${r.max_minutes||'—'}</td></tr>`).join('')}</tbody></table><div style="font-size:10px;color:var(--text3);margin-top:6px">ⓘ Duration = time from alert msg to nearest "event ended" msg within 3 hours</div>`:'—';
+  document.getElementById('vz-streaks').innerHTML=st.length?`<table><thead><tr><th>City</th><th>Days</th><th>From</th><th>To</th></tr></thead><tbody>${st.map(s=>`<tr><td style="font-weight:800">${s.city_name}</td><td style="color:var(--red);font-weight:900;font-size:16px">${s.streak_days}</td><td>${s.streak_start}</td><td>${s.streak_end}</td></tr>`).join('')}</tbody></table><div style="font-size:10px;color:var(--text3);margin-top:6px">ⓘ Consecutive calendar days with ≥1 alert message mentioning this city</div>`:'—';
+
+  // Heads-up & Event-ended analysis
+  const [hu,ee]=await Promise.all([api('/api/viz/heads_up_correlation'),api('/api/viz/event_ended_analysis')]);
+  // Heads-up summary
+  const bk=hu.buckets||{};
+  document.getElementById('vz-heads-up').innerHTML=`
+    <div class="grid g3" style="gap:8px;margin-bottom:10px">
+      <div class="stat purple" style="padding:8px 10px"><div class="lb">EARLY WARNINGS</div><div class="val">${hu.total}</div><div class="sub">התרעה מקדימה</div></div>
+      <div class="stat green" style="padding:8px 10px"><div class="lb">HIT RATE</div><div class="val">${hu.hit_rate_pct}%</div><div class="sub">${hu.hits}/${hu.total} followed by alert</div></div>
+      <div class="stat orange" style="padding:8px 10px"><div class="lb">AVG TIME TO ALERT</div><div class="val">${hu.avg_minutes_to_alert} min</div><div class="sub">Only ${hu.misses} false alarms</div></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;margin-bottom:4px">Time from warning to first alert:</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap">${Object.entries(bk).map(([k,v])=>`<span style="background:${k==='No alert'?'#fef2f2':'#f0fdf4'};border:1px solid ${k==='No alert'?'#fca5a5':'#86efac'};padding:3px 8px;border-radius:6px;font-size:10px"><b>${v}</b> ${k}</span>`).join('')}</div>
+    <div style="font-size:10px;color:var(--text3);margin-top:8px">ⓘ A "heads-up" (מבזק) warns residents that alerts are expected. ${hu.hit_rate_pct}% of the time, a real siren follows within 15 minutes.</div>`;
+  // Event-ended summary
+  document.getElementById('vz-event-ended').innerHTML=`
+    <div style="margin-bottom:8px;font-size:11px;color:var(--text3)">How often each threat type receives an official "event ended" (האירוע הסתיים) clearance:</div>
+    <table><thead><tr><th>Threat</th><th>Total</th><th>Cleared</th><th>Clear %</th><th style="color:var(--accent)">Avg Min</th><th>Median</th></tr></thead><tbody>
+    ${ee.by_type.map(t=>`<tr>
+      <td style="font-weight:800">${t.alert_type}</td>
+      <td>${t.total.toLocaleString()}</td>
+      <td>${t.cleared.toLocaleString()}</td>
+      <td><span style="color:${t.clear_pct>50?'var(--green)':'var(--orange)'};font-weight:700">${t.clear_pct}%</span></td>
+      <td style="color:var(--accent);font-weight:900">${t.avg_min||'—'}</td>
+      <td>${t.median_min||'—'}</td>
+    </tr>`).join('')}
+    </tbody></table>
+    <div style="font-size:10px;color:var(--text3);margin-top:6px">ⓘ Aircraft alerts get cleared ${ee.by_type.find(t=>t.alert_type==='aircraft')?.clear_pct||0}% of the time. Rocket alerts only ${ee.by_type.find(t=>t.alert_type==='rockets')?.clear_pct||0}%.</div>`;
+  // Heads-up timing chart
+  Plotly.newPlot('vz-hu-timing',[{x:Object.keys(bk),y:Object.values(bk),type:'bar',marker:{color:Object.keys(bk).map(k=>k==='No alert'?'#dc2626':'#22c55e'),cornerradius:6},text:Object.values(bk),textposition:'outside',textfont:{size:11}}],ml({margin:{b:50},yaxis:{title:'Count'}}),PC);
+  // Clearance monthly chart
+  if(ee.monthly.length){
+    Plotly.newPlot('vz-clearance-monthly',[
+      {x:ee.monthly.map(m=>m.month),y:ee.monthly.map(m=>m.clear_pct),name:'Clearance %',type:'scatter',mode:'lines+markers',line:{color:'#16a34a',width:2},yaxis:'y'},
+      {x:ee.monthly.map(m=>m.month),y:ee.monthly.map(m=>m.total),name:'Total Alerts',type:'bar',marker:{color:'rgba(79,70,229,0.2)'},yaxis:'y2'}
+    ],ml({yaxis:{title:'Clear %',range:[0,100]},yaxis2:{title:'Alerts',overlaying:'y',side:'right'},margin:{r:50}}),PC);
+  }
+}
+
+// ===== DATA MODEL =====
+async function loadModel(){
+  const [erd,prof,transforms]=await Promise.all([api('/api/viz/erd'),api('/api/data_profile'),api('/api/transformations')]);if(erd.error)return;
+  const colors={messages:'#4f46e5',alert_details:'#dc2626',zones:'#16a34a',cities:'#0891b2',db_info:'#7c3aed'};
+  let h=`<div style="display:flex;flex-direction:column;align-items:center;gap:0">
+    <div style="display:flex;gap:20px;justify-content:center;flex-wrap:wrap">${bEC('messages',erd,colors)}</div>
+    <div style="font-family:'JetBrains Mono';font-size:16px;color:var(--text3);padding:8px 0;text-align:center">│<br>1 : N<br>▼</div>
+    <div style="display:flex;gap:20px;justify-content:center;flex-wrap:wrap">${bEC('alert_details',erd,colors)}</div>
+    <div style="font-family:'JetBrains Mono';font-size:16px;color:var(--text3);padding:8px 0">▲&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▲<br>N:1&nbsp;&nbsp;&nbsp;N:1</div>
+    <div style="display:flex;gap:20px;justify-content:center;flex-wrap:wrap">${bEC('zones',erd,colors)}${bEC('cities',erd,colors)}</div></div>`;
+  document.getElementById('erd-box').innerHTML=h;
+  document.getElementById('model-stats').innerHTML=['messages','alert_details','zones','cities'].map(n=>{const i=erd.tables[n];return`<div class="stat" style="border-top:3px solid ${colors[n]}"><div class="lb">${n}</div><div class="val" style="color:${colors[n]}">${i.count.toLocaleString()}</div><div class="sub">${i.columns.length} cols</div></div>`;}).join('');
+  document.getElementById('etl-explain').innerHTML=`<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:center;margin-bottom:14px"><div style="background:#fef3c7;border:2px solid #f59e0b;border-radius:10px;padding:12px 16px;text-align:center;font-weight:700">📄 Raw CSV<br><span style="font-size:10px;color:#92400e">msg_id, datetime_utc, raw_text</span></div><div style="font-size:24px;color:var(--accent)">→</div><div style="background:#ede9fe;border:2px solid #7c3aed;border-radius:10px;padding:12px 16px;text-align:center;font-weight:700">⚙️ Parser<br><span style="font-size:10px;color:#5b21b6">classify + extract</span></div><div style="font-size:24px;color:var(--accent)">→</div><div style="background:#dbeafe;border:2px solid #2563eb;border-radius:10px;padding:12px 16px;text-align:center;font-weight:700">🗄️ SQLite<br><span style="font-size:10px;color:#1e40af">4 tables + views</span></div></div><b>Pipeline:</b> ① Classify message type & threat ② Extract dates (3 format patterns) ③ Split zones & cities from bold markers ④ Normalize to dimension tables ⑤ Create alert_details fact table`;
+  document.getElementById('alt-designs').innerHTML=`<div class="card" style="border-top:3px solid #16a34a"><div class="card-h"><h3>✅ Star Schema (current)</h3></div><div class="card-b" style="font-size:12px;line-height:1.8"><b style="color:var(--green)">+</b> Fast aggregation, dashboard-optimized<br><b style="color:var(--green)">+</b> Clean dimensions, referential integrity<br><b style="color:var(--red)">-</b> JOINs required for every query<br><b style="color:var(--red)">-</b> 278K detail rows from 24K messages</div></div><div class="card" style="border-top:3px solid #f59e0b"><div class="card-h"><h3>🔄 Flat Denormalized</h3></div><div class="card-b" style="font-size:12px;line-height:1.8"><b style="color:var(--green)">+</b> Zero JOINs, simpler queries<br><b style="color:var(--green)">+</b> Easy pandas/CSV consumption<br><b style="color:var(--red)">-</b> No referential integrity<br><b style="color:var(--red)">-</b> Name inconsistencies = different entities</div></div><div class="card" style="border-top:3px solid #6366f1"><div class="card-h"><h3>📊 Event-Sourced</h3></div><div class="card-b" style="font-size:12px;line-height:1.8"><b style="color:var(--green)">+</b> Links alerts to all-clear messages<br><b style="color:var(--green)">+</b> Models event lifecycle<br><b style="color:var(--red)">-</b> Complex pairing logic<br><b style="color:var(--red)">-</b> More tables, harder to rebuild</div></div>`;
+  document.getElementById('data-profile').innerHTML=`<div style="line-height:2.2"><b>DB:</b> ${prof.db_size_mb} MB · <b>Days:</b> ${prof.distinct?.dates} · <b>Cities w/ alerts:</b> ${prof.cities_with_alerts}/${prof.distinct?.cities} · <b>Avg cities/alert:</b> ${prof.avg_cities_per_alert}<hr style="border-color:var(--border);margin:4px 0">${Object.entries(prof.messages_nulls||{}).map(([k,v])=>`${k}: <b style="color:${v>0?'var(--orange)':'var(--green)'}"> ${v}</b>`).join(' · ')}</div>`;
+  document.getElementById('views-list').innerHTML=(erd.views||[]).map(v=>`<div style="margin-bottom:10px"><b style="color:var(--accent)">${v.name}</b><pre style="background:var(--bg3);padding:6px;border-radius:6px;font-size:10px;margin-top:2px;overflow-x:auto;color:var(--text2);line-height:1.5">${v.sql}</pre></div>`).join('');
+  // Transformations
+  document.getElementById('transformations-list').innerHTML=(transforms||[]).map(t=>`
+    <div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--bg)">
+      <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">
+        <code style="background:var(--accent);color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">${t.table}.${t.field}</code>
+        <span style="font-size:10px;color:var(--text3)">from: ${t.source}</span>
+      </div>
+      <div style="margin-top:4px;font-size:11px;line-height:1.6">
+        <b>Formula:</b> <code style="background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:10px">${t.formula}</code>
+      </div>
+      <div style="margin-top:2px;font-size:10px;color:var(--text3)">${t.note}</div>
+      <div style="margin-top:2px;font-size:10px;color:var(--accent);font-weight:600">Purpose: ${t.purpose}</div>
+    </div>
+  `).join('');
+}
+function bEC(name,erd,colors){const info=erd.tables[name];const fks=(erd.foreign_keys[name]||[]).map(f=>f.from);let h=`<div class="erd-card"><div class="erd-card-h" style="background:${colors[name]}">${name}<span style="background:rgba(255,255,255,.2);padding:2px 8px;border-radius:8px;font-size:11px">${info.count.toLocaleString()}</span></div>`;for(const c of info.columns){const pk=c.pk===1,fk=fks.includes(c.name);h+=`<div class="erd-col"><span class="${pk?'pk':fk?'fk':''}">${pk?'🔑 ':fk?'🔗 ':'  '}${c.name}</span><span class="t">${c.type||'TEXT'}</span></div>`;}return h+'</div>';}
+
+// ===== DATA JOURNEY =====
+let journeyData=[];
+async function loadJourney(){
+  document.getElementById('journey-examples').innerHTML='<div style="padding:20px;color:var(--text3)">Loading examples...</div>';
+  journeyData=await api('/api/data_journey/examples');
+  renderJourney();
+}
+function formatTelegramText(raw){
+  if(!raw)return'—';
+  // Convert **bold** to <b>, preserve text
+  let t=raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  t=t.replace(/\*\*(.+?)\*\*/g,'<b style="color:var(--text)">$1</b>');
+  // Add line breaks before key sections
+  t=t.replace(/(🚨|✈|💥)/g,'<br>$1');
+  t=t.replace(/(\*\*אזור )/g,'<br>$1');
+  t=t.replace(/(\*\*היכנסו)/g,'<br><br>$1');
+  t=t.replace(/(להנחיות המלאות)/g,'<br><span style="font-size:9px;color:var(--text3)">$1</span>');
+  t=t.replace(/(https?:\/\/\S+)/g,'<a href="$1" target="_blank" style="font-size:9px;color:var(--accent)">$1</a>');
+  // Remove leading <br>
+  t=t.replace(/^(<br>)+/,'');
+  return t;
+}
+function renderJourney(){
+  const container=document.getElementById('journey-examples');
+  if(!journeyData.length){container.innerHTML='<div style="padding:20px;color:var(--text3)">No examples found.</div>';return;}
+  const colors={telegram:'#7c3aed',csv:'#d97706',messages:'#4f46e5',details:'#dc2626',views:'#16a34a'};
+  const arrow=`<div class="journey-arrow"><svg viewBox="0 0 40 24"><path d="M2 12 L30 12 M24 6 L32 12 L24 18" stroke="#8790b0" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
+  let html='';
+  journeyData.forEach((ex,idx)=>{
+    const msgRow=ex.db.messages_row;
+    const typeBg=msgRow.alert_type==='rockets'?'#dc2626':msgRow.alert_type==='aircraft'?'#2563eb':msgRow.message_type==='event_ended'?'#16a34a':'#7c3aed';
+    const isAlert=msgRow.message_type==='alert'&&!msgRow.is_drill;
+    // Truncate raw text for display
+    const rawFormatted=formatTelegramText(ex.telegram.raw_text);
+    // CSV columns
+    const csvCols=ex.csv.row?Object.entries(ex.csv.row):[];
+    // Calc fields
+    const calcFields=ex.calculated_fields||[];
+    html+=`<div class="journey-card" id="journey-${idx}">
+      <div class="journey-header" onclick="toggleJourney(${idx})">
+        <h4>
+          <span style="font-size:16px">${msgRow.message_type==='alert'?'🚨':msgRow.message_type==='event_ended'?'✅':'📋'}</span>
+          <span>${ex.title}</span>
+          <span class="jh-badge" style="background:${typeBg}">${msgRow.alert_type||msgRow.message_type}</span>
+          <span class="jh-badge" style="background:rgba(255,255,255,.15)">msg_id: ${ex.msg_id}</span>
+          ${msgRow.is_drill?'<span class="jh-badge" style="background:#f59e0b">DRILL</span>':''}
+        </h4>
+        <span style="font-size:10px;opacity:.7">${ex.description}</span>
+      </div>
+      <div class="journey-body" id="journey-body-${idx}">
+        <div class="journey-flow" id="journey-flow-${idx}">
+          <!-- Stage 1: Telegram -->
+          <div class="journey-stage" data-delay="0">
+            <div class="stage-box" style="border-color:${colors.telegram}">
+              <div class="stage-head" style="background:${colors.telegram}">📱 Telegram Message</div>
+              <div class="stage-body">
+                <div style="direction:rtl;text-align:right;font-size:11px;line-height:1.6;color:var(--text2);padding:6px 8px;background:var(--bg3);border-radius:6px;max-height:160px;overflow-y:auto;margin-bottom:6px">${rawFormatted}</div>
+                <div class="field-row"><span class="fname">msg_id</span><span class="fval">${ex.msg_id}</span></div>
+                <div class="field-row"><span class="fname">datetime_utc</span><span class="fval">${ex.telegram.datetime_utc}</span></div>
+                <div class="field-row"><span class="fname">views</span><span class="fval">${ex.telegram.views||'—'}</span></div>
+              </div>
+            </div>
+          </div>
+          ${arrow}
+          <!-- Stage 2: CSV -->
+          <div class="journey-stage" data-delay="400">
+            <div class="stage-box" style="border-color:${colors.csv}">
+              <div class="stage-head" style="background:${colors.csv}">📄 CSV File</div>
+              <div class="stage-body">
+                <div style="font-weight:800;margin-bottom:4px;color:${colors.csv}">${ex.csv.source_file||'—'}</div>
+                <div style="font-size:9px;color:var(--text3);margin-bottom:6px">Raw fields saved as-is from Telegram API</div>
+                ${csvCols.slice(0,6).map(([k,v])=>`<div class="field-row"><span class="fname">${k}</span><span class="fval" title="${String(v).replace(/"/g,'&quot;')}">${String(v).slice(0,50)}</span></div>`).join('')}
+                ${csvCols.length>6?`<div style="color:var(--text3);font-size:9px;margin-top:4px">+${csvCols.length-6} more fields</div>`:''}
+              </div>
+            </div>
+          </div>
+          ${arrow}
+          <!-- Stage 3: Parser / Calculated Fields -->
+          <div class="journey-stage" data-delay="800">
+            <div class="stage-box" style="border-color:#7c3aed">
+              <div class="stage-head" style="background:#7c3aed">⚙️ Parser (pikud.py)</div>
+              <div class="stage-body">
+                <div style="font-size:9px;color:var(--text3);margin-bottom:6px">classify_message() + extract_date_time() + extract_zones_and_cities()</div>
+                ${calcFields.map(cf=>`<div class="field-row">
+                  <span class="fname">${cf.field} <span class="calc-badge">CALC</span></span>
+                  <span class="fval" title="${cf.formula}">${cf.value!==null&&cf.value!==undefined?cf.value:'NULL'}</span>
+                </div>`).join('')}
+                <div style="margin-top:6px;font-size:9px;color:var(--text3)">
+                  Zones extracted: <b>${ex.db.zone_count}</b> |
+                  Cities extracted: <b>${ex.db.city_count}</b>
+                </div>
+              </div>
+            </div>
+          </div>
+          ${arrow}
+          <!-- Stage 4: messages table -->
+          <div class="journey-stage" data-delay="1200">
+            <div class="stage-box" style="border-color:${colors.messages}">
+              <div class="stage-head" style="background:${colors.messages}">🗄️ messages table <span style="background:rgba(255,255,255,.2);padding:1px 6px;border-radius:4px;font-size:9px">1 row</span></div>
+              <div class="stage-body">
+                ${Object.entries(msgRow).map(([k,v])=>{
+                  const isCalc=['datetime_israel','message_type','alert_type','is_drill','alert_date','alert_time_local'].includes(k);
+                  return`<div class="field-row"><span class="fname">${k} ${isCalc?'<span class="calc-badge">CALC</span>':''}</span><span class="fval">${v!==null&&v!==undefined?v:'NULL'}</span></div>`;
+                }).join('')}
+              </div>
+            </div>
+          </div>
+          ${ex.db.detail_count>0?arrow:''}
+          ${ex.db.detail_count>0?`
+          <!-- Stage 5: alert_details -->
+          <div class="journey-stage" data-delay="1600">
+            <div class="stage-box" style="border-color:${colors.details}">
+              <div class="stage-head" style="background:${colors.details}">📊 alert_details <span style="background:rgba(255,255,255,.2);padding:1px 6px;border-radius:4px;font-size:9px">${ex.db.detail_count} rows</span></div>
+              <div class="stage-body" style="max-height:250px">
+                <table style="font-size:10px;width:100%"><thead><tr><th style="font-size:9px">Zone</th><th style="font-size:9px">City</th><th style="font-size:9px">Shelter</th></tr></thead><tbody>
+                ${ex.db.alert_details.slice(0,15).map(d=>`<tr><td style="direction:rtl;font-size:9px">${d.zone_name||'—'}</td><td style="direction:rtl;font-size:9px">${d.city_name||'—'}</td><td style="font-size:9px">${d.shelter_time||'—'}</td></tr>`).join('')}
+                ${ex.db.detail_count>15?`<tr><td colspan="3" style="color:var(--text3);font-size:9px">...+${ex.db.detail_count-15} more rows</td></tr>`:''}
+                </tbody></table>
+              </div>
+            </div>
+          </div>`:''}
+          ${ex.views_included.length?arrow:''}
+          ${ex.views_included.length?`
+          <!-- Stage 6: Views -->
+          <div class="journey-stage" data-delay="2000">
+            <div class="stage-box" style="border-color:${colors.views}">
+              <div class="stage-head" style="background:${colors.views}">👁️ Views</div>
+              <div class="stage-body">
+                <div style="font-size:9px;color:var(--text3);margin-bottom:4px">This message contributes to:</div>
+                ${ex.views_included.map(v=>`<div style="padding:3px 0"><code style="color:${colors.views};font-weight:700">${v}</code></div>`).join('')}
+                ${!isAlert?'<div style="color:var(--orange);font-size:9px;margin-top:4px">⚠️ Non-alert or drill — excluded from alert statistics</div>':''}
+              </div>
+            </div>
+          </div>`:''}
+        </div>
+        <!-- Counting Summary -->
+        <div class="journey-counts" id="journey-counts-${idx}">
+          <div class="jcount" style="border-top:3px solid #dc2626"><div class="jc-val" style="color:#dc2626">+${ex.counting.alert_messages}</div><div class="jc-lbl">Alert Messages</div></div>
+          <div class="jcount" style="border-top:3px solid #d97706"><div class="jc-val" style="color:#d97706">+${ex.counting.city_alerts}</div><div class="jc-lbl">City-Level Alerts</div></div>
+          <div class="jcount" style="border-top:3px solid #2563eb"><div class="jc-val" style="color:#2563eb">+${ex.counting.zone_alerts}</div><div class="jc-lbl">Zone-Level Alerts</div></div>
+          <div class="jcount" style="border-top:3px solid var(--text3)">
+            <div class="jc-lbl" style="font-size:10px;line-height:1.4">
+              ${ex.counting.alert_messages?`1 msg → ${ex.counting.city_alerts} cities in ${ex.counting.zone_alerts} zones`:'Does not count as alert'}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  });
+  container.innerHTML=html;
+}
+function toggleJourney(idx){
+  const body=document.getElementById('journey-body-'+idx);
+  const wasOpen=body.classList.contains('open');
+  body.classList.toggle('open');
+  if(!wasOpen)animateJourney(idx);
+}
+function animateJourney(idx){
+  const flow=document.getElementById('journey-flow-'+idx);
+  const stages=flow.querySelectorAll('.journey-stage');
+  const arrows=flow.querySelectorAll('.journey-arrow');
+  const counts=document.getElementById('journey-counts-'+idx);
+  // Reset
+  stages.forEach(s=>{s.classList.remove('visible');});
+  arrows.forEach(a=>{a.classList.remove('visible');});
+  counts.classList.remove('visible');
+  // Animate stages and arrows sequentially
+  let delay=100;
+  stages.forEach((stage,i)=>{
+    const d=parseInt(stage.dataset.delay)||delay;
+    setTimeout(()=>stage.classList.add('visible'),d);
+    if(i<arrows.length){
+      setTimeout(()=>arrows[i].classList.add('visible'),d+200);
+    }
+    delay=d+400;
+  });
+  setTimeout(()=>counts.classList.add('visible'),delay+200);
+}
+function playAllJourneys(){
+  const cards=document.querySelectorAll('.journey-card');
+  cards.forEach((card,i)=>{
+    setTimeout(()=>{
+      const body=card.querySelector('.journey-body');
+      if(!body.classList.contains('open')){
+        body.classList.add('open');
+        animateJourney(i);
+      }
+    },i*3000);
+  });
+}
+
+// ===== PIPELINE =====
+let evtSrc;
+function connectSSE(){
+  if(evtSrc)evtSrc.close();
+  evtSrc=new EventSource('/api/pipeline/stream');
+  evtSrc.onmessage=e=>{
+    const d=JSON.parse(e.data);if(d.type==='ping')return;
+    const el=document.getElementById('pipe-log');
+    el.innerHTML+=`<div class="ll ${d.level==='error'?'error':d.level==='success'?'success':'info'}">[${d.ts}] ${d.msg}</div>`;
+    el.scrollTop=el.scrollHeight;
+    if(d.level==='success'||d.level==='error'){
+      document.getElementById('pipe-indicator').className='pipe-status idle';
+      document.getElementById('pipe-indicator').innerHTML='● Idle';
+      refreshAll();loadPipeStats();loadVersions();
+    }
+  };
+}
+async function runPipeline(a){
+  if(!confirm(`Run "${a}"?`))return;
+  document.getElementById('pipe-log').innerHTML='';
+  document.getElementById('pipe-indicator').className='pipe-status running';
+  document.getElementById('pipe-indicator').innerHTML=`<div class="spinner"></div> Running ${a}...`;
+  const r=await api(`/api/pipeline/${a}`,{method:'POST'});
+  if(r.error){
+    document.getElementById('pipe-log').innerHTML+=`<div class="ll error">${r.error}</div>`;
+    document.getElementById('pipe-indicator').className='pipe-status idle';
+    document.getElementById('pipe-indicator').innerHTML='● Idle';
+  }
+}
+async function loadPipeStats(){
+  const s=await api('/api/stats');if(s.error)return;
+  const lr=s.last_run;
+  document.getElementById('pipe-stats').innerHTML=`
+    <b>Version:</b> v${s.version} · <b>Built:</b> ${s.db_built_at||'—'}<br>
+    <b>Messages:</b> ${s.total_messages.toLocaleString()} · <b>Alert details:</b> ${s.total_details.toLocaleString()}<br>
+    <b>Cities:</b> ${s.total_cities.toLocaleString()} · <b>Zones:</b> ${s.total_zones.toLocaleString()} · <b>Runs:</b> ${s.run_count}
+    <hr style="border-color:var(--border);margin:6px 0">
+    ${lr?`<b>Last run:</b> ${lr.filename}<br><b>Fetched:</b> ${lr.fetched_at}<br><b>Messages:</b> ${lr.message_count.toLocaleString()} · <b>IDs:</b> ${lr.start_msg_id} → ${lr.end_msg_id}`:'No runs yet'}`;
+}
+async function loadVersions(){
+  const data=await api('/api/pipeline/versions');if(!data.versions)return;
+  let h='';
+  for(const v of data.versions){
+    const cur=v.is_current?'<span style="background:var(--green);color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800;margin-left:6px">CURRENT</span>':'';
+    const dbBadge=v.db_exists
+      ?`<span style="color:var(--green);font-weight:700">✓ ${v.db_size}</span>`
+      :'<span style="color:var(--red);font-weight:700">✗ Missing</span>';
+    h+=`<div class="card" style="margin-bottom:12px">
+      <div class="card-h"><h3>📦 Version v${v.version} ${cur}</h3>
+        <span style="font-size:10px;color:var(--text3);margin-left:auto">
+          ${v.total_messages.toLocaleString()} messages · Last ID: ${v.last_msg_id.toLocaleString()} · DB: ${dbBadge}
+          ${v.db_exists?' · DB rows: '+v.db_msg_count.toLocaleString():''}
+        </span>
+      </div>
+      <div class="card-b np">
+        <div style="padding:10px 14px">
+          <div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Fetches & Deltas</div>
+          <table>
+            <thead><tr>
+              <th>#</th><th>Type</th><th>File</th><th>Size</th><th>Messages</th><th>ID Range</th><th>Date Range</th><th>Fetched At</th><th>In DB</th><th>Status</th>
+            </tr></thead>
+            <tbody>`;
+    for(const r of v.runs){
+      const typ=r.is_initial
+        ?'<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800">INITIAL</span>'
+        :'<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800">DELTA</span>';
+      const fileOk=r.file_exists
+        ?'':'<span style="color:var(--red);font-weight:700"> ✗ MISSING</span>';
+      const dbStatus=!v.db_exists?'<span style="color:var(--text3)">—</span>'
+        :r.db_verified
+          ?'<span style="color:var(--green);font-weight:700">✓ Verified</span>'
+          :`<span style="color:var(--red);font-weight:700">✗ ${r.missing_from_db} missing</span>`;
+      const inDb=!v.db_exists?'—':`${r.in_db.toLocaleString()} / ${r.message_count.toLocaleString()}`;
+      const startDate=r.start_date?r.start_date.split(' ')[0]:'—';
+      const endDate=r.end_date?r.end_date.split(' ')[0]:'—';
+      h+=`<tr>
+        <td>${r.index+1}</td>
+        <td>${typ}</td>
+        <td style="font-family:'JetBrains Mono';font-size:10px">${r.filename}${fileOk}</td>
+        <td>${r.file_size}</td>
+        <td style="font-weight:700">${r.message_count.toLocaleString()}</td>
+        <td style="font-family:'JetBrains Mono';font-size:10px">${(r.start_msg_id||0).toLocaleString()} → ${(r.end_msg_id||0).toLocaleString()}</td>
+        <td style="font-size:10px">${startDate} → ${endDate}</td>
+        <td style="font-size:10px">${r.fetched_at||'—'}</td>
+        <td>${inDb}</td>
+        <td>${dbStatus}</td>
+      </tr>`;
+    }
+    h+=`</tbody></table></div>
+        <div style="padding:8px 14px;border-top:1px solid var(--border);background:var(--bg3)">
+          <div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">All Files on Disk</div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;font-family:'JetBrains Mono'">`;
+    for(const f of v.files){
+      const icon=f.name.endsWith('.csv')?'📄':f.name.endsWith('.json')?'📋':f.name.endsWith('.db')?'🗄️':'📎';
+      h+=`<span style="background:var(--bg2);padding:3px 8px;border-radius:6px;border:1px solid var(--border)">${icon} ${f.name} <span style="color:var(--text3)">${f.size_human}</span></span>`;
+    }
+    h+=`</div></div></div></div>`;
+  }
+  document.getElementById('versions-container').innerHTML=h||'<div class="card"><div class="card-b" style="color:var(--text3)">No data versions found. Run a Full Refresh to get started.</div></div>';
+}
+async function runCheck(name,btn){
+  const card=btn.closest('.val-check');
+  const resultDiv=card.querySelector('.check-result');
+  btn.disabled=true;btn.textContent='Running...';
+  resultDiv.style.display='block';
+  resultDiv.innerHTML='<span style="color:var(--text3)">Checking...</span>';
+  const r=await api(`/api/pipeline/validate/${name}`,{method:'POST'});
+  btn.disabled=false;btn.textContent='Run';
+  if(r.error){
+    resultDiv.innerHTML=`<div style="color:var(--red)">Error: ${r.error}</div>`;
+    card.style.borderLeft='3px solid var(--red)';return;
+  }
+  let html=r.details.map(d=>`<div style="color:${d.startsWith('✗')?'var(--red)':'var(--text2)'}">${d}</div>`).join('');
+  if(r.issues.length){
+    html+=r.issues.map(i=>`<div style="color:var(--red);font-weight:600">✗ ${i}</div>`).join('');
+  }
+  resultDiv.innerHTML=html;
+  card.style.borderLeft=r.ok?'3px solid var(--green)':'3px solid var(--red)';
+}
+async function runAllChecks(){
+  const checks=document.querySelectorAll('.val-check');
+  for(const card of checks){
+    const btn=card.querySelector('button');
+    const name=card.dataset.check;
+    await runCheck(name,btn);
+  }
+}
+function clearAllChecks(){
+  document.querySelectorAll('.val-check').forEach(card=>{
+    card.style.borderLeft='';
+    card.querySelector('.check-result').style.display='none';
+    card.querySelector('.check-result').innerHTML='';
+  });
+}
+let lastSampleResult=null;
+async function runSampleCheck(){
+  const el=document.getElementById('sample-check-result');
+  el.innerHTML='<span style="color:var(--accent)">Sampling random message...</span>';
+  const r=await api('/api/pipeline/sample_check',{method:'POST'});
+  if(r.error){el.innerHTML=`<span style="color:var(--red)">${r.error}</span>`;return;}
+  lastSampleResult=r;
+  document.getElementById('validate-sample-btn').style.display='inline-flex';
+  const db=r.db_record;
+  const csv=r.csv_row;
+  el.innerHTML=`
+    <div class="grid g2" style="gap:10px">
+      <div>
+        <div style="font-weight:800;margin-bottom:6px;color:var(--accent)">🗄️ Database Record — msg_id: ${r.msg_id}</div>
+        <table style="font-size:11px">
+          <tr><td style="font-weight:700;width:130px">datetime_utc</td><td>${db.datetime_utc}</td></tr>
+          <tr><td style="font-weight:700">datetime_israel</td><td>${db.datetime_israel} <span style="color:var(--text3);font-size:10px">(calculated)</span></td></tr>
+          <tr><td style="font-weight:700">message_type</td><td><span style="background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700">${db.message_type}</span> <span style="color:var(--text3);font-size:10px">(classified from text)</span></td></tr>
+          <tr><td style="font-weight:700">alert_type</td><td><span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700">${db.alert_type||'—'}</span> <span style="color:var(--text3);font-size:10px">(classified from text)</span></td></tr>
+          <tr><td style="font-weight:700">is_drill</td><td>${db.is_drill?'<span style="color:var(--red)">Yes</span>':'No'}</td></tr>
+          <tr><td style="font-weight:700">alert_date</td><td>${db.alert_date||'—'} <span style="color:var(--text3);font-size:10px">(extracted from text)</span></td></tr>
+          <tr><td style="font-weight:700">alert_time_local</td><td>${db.alert_time_local||'—'} <span style="color:var(--text3);font-size:10px">(extracted from text)</span></td></tr>
+        </table>
+        <div style="margin-top:8px;font-weight:800;margin-bottom:4px">📝 Parsed Details (${r.detail_count} rows in alert_details)</div>
+        <table style="font-size:10px"><thead><tr><th>Zone</th><th>City</th><th>Shelter</th></tr></thead><tbody>
+        ${r.alert_details.map(d=>`<tr><td>${d.zone_name||'—'}</td><td style="direction:rtl">${d.city_name||'—'}</td><td>${d.shelter_time||'—'}</td></tr>`).join('')}
+        </tbody></table>
+      </div>
+      <div>
+        <div style="font-weight:800;margin-bottom:6px;color:var(--green)">📄 CSV Source: ${r.csv_source||'NOT FOUND'}</div>
+        ${csv?`<table style="font-size:11px">
+          ${Object.entries(csv).map(([k,v])=>`<tr><td style="font-weight:700;width:130px">${k}</td><td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${String(v).replace(/"/g,'&quot;')}">${v}</td></tr>`).join('')}
+        </table>`:'<span style="color:var(--red)">CSV row not found for this msg_id</span>'}
+        <div style="margin-top:8px;font-weight:800;margin-bottom:4px;color:var(--orange)">📜 Raw Telegram Text</div>
+        <div class="log-box" style="max-height:200px;min-height:60px;direction:rtl;text-align:right;font-size:12px;line-height:1.8">${db.raw_text||'—'}</div>
+      </div>
+    </div>`;
+}
+async function loadLogs(){
+  const logs=await api('/api/logs');
+  document.getElementById('log-list').innerHTML=logs.length
+    ?logs.map(l=>`<li onclick="viewLog('${l.name}')"><span>${l.name}</span><span class="meta">${(l.size/1024).toFixed(1)}KB · ${l.modified}</span></li>`).join('')
+    :'<li style="color:var(--text3);padding:12px">No logs yet</li>';
+}
+async function viewLog(n){
+  document.getElementById('log-name').textContent=n;
+  const r=await api('/api/logs/'+n);if(r.error)return;
+  document.getElementById('log-content').innerHTML=r.content.split('\n').map(l=>`<div class="ll ${l.match(/error|FAIL|✗/i)?'error':l.match(/success|PASSED|✓/i)?'success':'info'}">${l}</div>`).join('');
+}
+
+// ===== SQL =====
+let editor;function initEditor(){editor=CodeMirror.fromTextArea(document.getElementById('sql-editor'),{mode:'text/x-sql',lineNumbers:true,matchBrackets:true,extraKeys:{'Ctrl-Enter':runQ,'Cmd-Enter':runQ}});editor.setValue("SELECT city_name, alert_count, rocket_count, aircraft_count\nFROM v_city_alert_counts ORDER BY alert_count DESC LIMIT 20;");}
+const SQ={top:"SELECT city_name, alert_count, rocket_count, aircraft_count\nFROM v_city_alert_counts ORDER BY alert_count DESC LIMIT 20;",oct7:"SELECT datetime_israel, message_type, alert_type, substr(raw_text,1,120)\nFROM messages WHERE date(datetime_israel)='2023-10-07'\nORDER BY datetime_israel LIMIT 100;",zones:"SELECT z.zone_name, COUNT(*) as alerts\nFROM alert_details ad JOIN messages m ON ad.msg_id=m.msg_id\nJOIN zones z ON ad.zone_id=z.zone_id\nWHERE m.message_type='alert' GROUP BY z.zone_name ORDER BY alerts DESC;",streaks:"WITH cd AS (\n  SELECT DISTINCT c.city_name, date(m.datetime_israel) as d\n  FROM alert_details ad JOIN messages m ON ad.msg_id=m.msg_id\n  JOIN cities c ON ad.city_id=c.city_id WHERE m.message_type='alert'\n), n AS (\n  SELECT *, julianday(d)-ROW_NUMBER() OVER(PARTITION BY city_name ORDER BY d) as g FROM cd\n)\nSELECT city_name, COUNT(*) as days, MIN(d) as start, MAX(d) as end\nFROM n GROUP BY city_name, g HAVING days>=5 ORDER BY days DESC LIMIT 20;",safest:"SELECT CAST(strftime('%H',datetime_israel) AS INT) as hour,\n  COUNT(*) as alerts\nFROM messages WHERE message_type='alert' AND is_drill=0\nGROUP BY hour ORDER BY alerts ASC;",latest:"SELECT msg_id, datetime_israel, message_type, alert_type, substr(raw_text,1,150)\nFROM messages ORDER BY datetime_israel DESC LIMIT 30;"};
+function sq(k){editor.setValue(SQ[k]);}
+async function runQ(){const sql=editor.getValue().trim();if(!sql)return;document.getElementById('q-status').textContent='Running...';const t0=performance.now();try{const r=await api('/api/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sql})});const ms=((performance.now()-t0)/1000).toFixed(2);if(r.error){document.getElementById('q-status').textContent='Error';document.getElementById('q-result').innerHTML=`<div style="color:var(--red);padding:12px">${r.error}</div>`;return;}document.getElementById('q-status').textContent=`${r.count} rows · ${ms}s`;let h='<table><thead><tr>'+r.columns.map(c=>`<th>${c}</th>`).join('')+'</tr></thead><tbody>';r.rows.forEach(row=>{h+='<tr>'+row.map(v=>`<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v!==null?v:'NULL'}</td>`).join('')+'</tr>';});document.getElementById('q-result').innerHTML=h+'</tbody></table>';}catch(e){document.getElementById('q-status').textContent=e.message;}}
+
+// ===== HOME =====
+function goHome(){
+  // Reset all filters
+  activeFilter={date_from:null,date_to:null,alert_type:null,zone:null,city:null};
+  document.getElementById('filter-alert-type').value='';
+  document.getElementById('filter-zone').value='';
+  document.getElementById('filter-city').value='';
+  document.querySelectorAll('.pf-btn').forEach((b,i)=>{if(i===0)b.classList.add('active');else b.classList.remove('active');});
+  // Switch to overview tab
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelector('.tab[data-page="overview"]').classList.add('active');
+  document.getElementById('page-overview').classList.add('active');
+  updateFilterBanner();
+  refreshAll();
+}
+
+// ===== VALIDATE SAMPLE =====
+function validateSample(){
+  if(!lastSampleResult)return;
+  const r=lastSampleResult;
+  const db=r.db_record;const csv=r.csv_row;
+  const issues=[];const checks=[];
+  // 1. CSV exists
+  if(r.csv_source)checks.push('✓ CSV source found: '+r.csv_source);
+  else issues.push('✗ CSV source not found');
+  // 2. CSV row matches DB
+  if(csv&&db){
+    if(csv.msg_id==db.msg_id)checks.push('✓ msg_id matches CSV↔DB');
+    else issues.push('✗ msg_id mismatch');
+    if(csv.datetime_utc===db.datetime_utc)checks.push('✓ datetime_utc matches');
+    else issues.push('✗ datetime_utc mismatch: CSV='+csv.datetime_utc+' DB='+db.datetime_utc);
+    if(csv.raw_text===db.raw_text)checks.push('✓ raw_text matches CSV↔DB (identical)');
+    else if(csv.raw_text?.slice(0,50)===db.raw_text?.slice(0,50))checks.push('✓ raw_text starts match (minor diff)');
+    else issues.push('✗ raw_text differs between CSV and DB');
+  }
+  // 3. Details exist for alerts
+  if(db.message_type==='alert'&&!db.is_drill){
+    if(r.detail_count>0)checks.push('✓ alert_details: '+r.detail_count+' rows');
+    else issues.push('✗ Alert message has 0 alert_details rows');
+  }
+  // 4. Calculated fields
+  if(db.datetime_israel)checks.push('✓ datetime_israel computed: '+db.datetime_israel);
+  else if(db.datetime_utc)issues.push('✗ datetime_israel is NULL despite having datetime_utc');
+  if(db.message_type)checks.push('✓ message_type classified: '+db.message_type);
+  const el=document.getElementById('sample-check-result');
+  const summary=issues.length?`<div style="color:var(--red);font-weight:700;margin-bottom:6px">⚠️ ${issues.length} issue(s) found</div>`:`<div style="color:var(--green);font-weight:700;margin-bottom:6px">✅ All checks passed</div>`;
+  el.innerHTML+=`<div style="margin-top:12px;padding:10px;background:${issues.length?'#fef2f2':'#f0fdf4'};border:1px solid ${issues.length?'#fca5a5':'#86efac'};border-radius:8px;font-size:11px;line-height:1.8">${summary}${checks.map(c=>'<div>'+c+'</div>').join('')}${issues.map(i=>'<div style="color:var(--red)">'+i+'</div>').join('')}</div>`;
+}
+
+// ===== SORT CITIES =====
+async function sortCities(order){
+  const qa=getQA();
+  const limit=order==='asc'?'limit=12':'limit=12';
+  const sort=order==='asc'?'&sort=asc':'';
+  const cities=await api('/api/viz/top_cities?'+limit+qa+sort);
+  plotCities(cities,order);
+}
+
+// ===== SQL LATENCY MONITOR =====
+async function loadSqlLatency(){
+  const d=await api('/api/pipeline/sql_latency');
+  const el=document.getElementById('sql-latency-content');
+  if(!d.total){el.innerHTML='<div style="color:var(--text3)">No SQL queries logged yet. Use the dashboard, then refresh.</div>';return;}
+  const p=d.percentiles;
+  const kb=n=>(n/1024).toFixed(1);
+  el.innerHTML=`
+    <div class="grid g4" style="gap:6px;margin-bottom:10px">
+      <div class="stat" style="padding:6px 8px"><div class="lb">QUERIES</div><div class="val" style="font-size:18px">${d.total.toLocaleString()}</div><div class="detail">${d.total_rows?.toLocaleString()||0} rows returned</div></div>
+      <div class="stat" style="padding:6px 8px"><div class="lb">AVG LATENCY</div><div class="val" style="font-size:18px">${d.avg_ms}ms</div><div class="detail">${kb(d.total_bytes||0)} KB transferred</div></div>
+      <div class="stat" style="padding:6px 8px"><div class="lb">P50 / P90</div><div class="val" style="font-size:18px">${p.p50} / ${p.p90}ms</div></div>
+      <div class="stat" style="padding:6px 8px"><div class="lb">P95 / P99 / MAX</div><div class="val" style="font-size:14px;color:${p.p99>300?'var(--red)':p.p95>100?'var(--orange)':'var(--green)'}">${p.p95} / ${p.p99} / ${p.max}ms</div></div>
+    </div>
+    <div style="font-weight:800;margin-bottom:6px">Top 15 Slowest Queries</div>
+    <div style="max-height:300px;overflow:auto">
+    <table><thead><tr><th>Max</th><th>Avg</th><th>Calls</th><th>Avg Rows</th><th>Total KB</th><th>SQL</th></tr></thead><tbody>
+    ${d.top_slow.map(q=>`<tr>
+      <td style="font-weight:900;color:${q.max_ms>200?'var(--red)':q.max_ms>50?'var(--orange)':'var(--green)'}">${q.max_ms}ms</td>
+      <td>${q.avg_ms}ms</td>
+      <td>${q.calls}</td>
+      <td>${q.avg_rows||0}</td>
+      <td>${kb(q.total_bytes||0)}</td>
+      <td style="font-family:'JetBrains Mono';font-size:9px;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${q.sql.replace(/"/g,'&quot;')}">${q.sql.slice(0,100)}</td>
+    </tr>`).join('')}
+    </tbody></table></div>
+    ${d.by_endpoint?.length?`<div style="font-weight:800;margin:10px 0 6px">By Endpoint (Total Time)</div>
+    <div style="max-height:200px;overflow:auto">
+    <table><thead><tr><th>Endpoint</th><th>Calls</th><th>Avg</th><th>Max</th><th>Total</th></tr></thead><tbody>
+    ${d.by_endpoint.map(e=>`<tr><td style="font-family:'JetBrains Mono';font-size:10px">${e.endpoint}</td><td>${e.calls}</td><td>${e.avg_ms}ms</td><td>${e.max_ms}ms</td><td>${Math.round(e.total_ms)}ms</td></tr>`).join('')}
+    </tbody></table></div>`:''}
+    <div style="font-size:10px;color:var(--text3);margin-top:8px">📁 Log: <code>${d.log_path}</code> (JSONL — fields: ts, sql, ms, rows, bytes, endpoint)</div>`;
+}
+
+// ===== ALERT DRILL-DOWN =====
+let drilldownOffset=0;let drilldownLoading=false;
+function openDrilldown(){
+  drilldownOffset=0;
+  document.getElementById('drilldown-body').innerHTML='';
+  document.getElementById('drilldown-modal').classList.add('show');
+  const parts=[];
+  if(activeFilter.city)parts.push(activeFilter.city);
+  if(activeFilter.zone)parts.push(activeFilter.zone);
+  if(activeFilter.alert_type)parts.push(activeFilter.alert_type);
+  if(activeFilter.date_from)parts.push('from '+activeFilter.date_from);
+  document.getElementById('drilldown-title').textContent='🚨 Alerts'+(parts.length?' — '+parts.join(' + '):'');
+  loadMoreAlerts();
+}
+function closeDrilldown(){document.getElementById('drilldown-modal').classList.remove('show');}
+async function loadMoreAlerts(){
+  if(drilldownLoading)return;
+  drilldownLoading=true;
+  const q=getQ()+(getQ()?'&':'?')+`limit=50&offset=${drilldownOffset}`;
+  const d=await api('/api/alerts/drilldown'+q);
+  drilldownLoading=false;
+  document.getElementById('drilldown-count').textContent=`${d.total} alerts total · Sorted newest → oldest`;
+  const body=document.getElementById('drilldown-body');
+  for(const a of d.alerts){
+    const typeBg=a.alert_type==='rockets'?'#dc2626':a.alert_type==='aircraft'?'#2563eb':'#7c3aed';
+    const zones=[...new Set(a.details.map(d=>d.zone).filter(Boolean))];
+    const cities=a.details.map(d=>d.city).filter(Boolean);
+    body.innerHTML+=`<div class="alert-feed-item">
+      <div class="alert-feed-meta">
+        <span style="font-weight:800;font-family:'JetBrains Mono';font-size:10px;color:var(--text3)">#${a.msg_id}</span>
+        <span style="font-weight:700">${a.datetime_israel} IST</span>
+        <span style="background:${typeBg};color:#fff;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700">${a.alert_type||a.message_type}</span>
+        <span style="color:var(--accent);font-weight:700;font-size:10px">${zones.join(', ')}</span>
+      </div>
+      <div class="alert-feed-text">${formatTelegramText(a.raw_text)}</div>
+      <div class="alert-feed-cities">🏙️ ${cities.join(', ')} (${cities.length} cities)</div>
+    </div>`;
+  }
+  drilldownOffset+=d.alerts.length;
+}
+function drilldownScroll(el){
+  if(el.scrollTop+el.clientHeight>=el.scrollHeight-100)loadMoreAlerts();
+}
+
+// INIT
+document.addEventListener('DOMContentLoaded',async()=>{await Promise.all([loadPrefilters(),loadFilterOptions()]);refreshAll();initEditor();connectSSE();});
+</script>
+<!-- DRILL-DOWN MODAL -->
+<div class="modal-overlay" id="drilldown-modal" onclick="if(event.target===this)closeDrilldown()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="drilldown-title">Alerts</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="drilldown-count" style="font-size:11px;color:var(--text3)"></span>
+        <button class="btn" onclick="closeDrilldown()" style="font-size:12px;padding:4px 10px">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" id="drilldown-body" onscroll="drilldownScroll(this)"></div>
+  </div>
+</div>
+</body>
+</html>

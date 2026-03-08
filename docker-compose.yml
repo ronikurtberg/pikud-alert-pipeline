@@ -1,0 +1,11 @@
+services:
+  dashboard:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data:ro
+      - ./db:/app/db:ro
+      - ./logs:/app/logs
+    environment:
+      - FLASK_ENV=production

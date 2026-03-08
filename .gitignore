@@ -1,0 +1,39 @@
+# Credentials & sessions
+.env
+pikud_session.session
+pikud_session.session-journal
+
+# Data (large files, user-specific)
+data/
+db/
+
+# Logs
+logs/
+
+# Private (personal notes, not for public repo)
+_private/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Claude
+.claude/
+*.iws
