@@ -11,8 +11,9 @@ This project is the answer to that question. It's a case study in what happens w
 ![Python](https://img.shields.io/badge/python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white) ![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white) ![Flask](https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white) ![Tests](https://img.shields.io/badge/179_tests-passing-brightgreen?style=for-the-badge) ![License](https://img.shields.io/badge/MIT-blue?style=for-the-badge)
 
 ```bash
-make install && cp .env.example .env    # one-time setup (needs free Telegram API key)
-make fetch && make run                  # fetch alerts → build DB → dashboard at localhost:5000
+python3 -m venv venv && source venv/bin/activate  # create & activate virtual environment
+make install && cp .env.example .env               # one-time setup (needs free Telegram API key)
+make fetch && make run                             # fetch alerts → build DB → dashboard at localhost:5000
 ```
 
 > **Setup requires a free [Telegram API key](https://my.telegram.org)** — takes 2 minutes, no paid tier. See [full installation guide](#-installation) below.
@@ -177,8 +178,12 @@ flowchart TD
 ```bash
 git clone https://github.com/ronikurtberg/pikud-alert-pipeline.git
 cd pikud-alert-pipeline
+python3 -m venv venv            # Create virtual environment
+source venv/bin/activate        # Activate it (run this each new terminal session)
 make install                    # Install Python dependencies
 ```
+
+> **Why a virtual environment?** Modern macOS and many Linux distros block `pip install` at the system level ([PEP 668](https://peps.python.org/pep-0668/)). A venv keeps everything isolated and avoids the `externally-managed-environment` error.
 
 **Telegram API key** (free, 2 minutes):
 1. Go to [my.telegram.org](https://my.telegram.org) and log in with your phone number
@@ -192,6 +197,7 @@ cp .env.example .env            # Then edit .env with your api_id and api_hash
 **Run the pipeline:**
 
 ```bash
+source venv/bin/activate        # If not already activated
 make fetch                      # Fetch all 24K+ alerts + build database
 make run                        # Dashboard at http://localhost:5000
 ```

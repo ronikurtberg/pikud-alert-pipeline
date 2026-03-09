@@ -34,8 +34,10 @@ test-perf: ## Run performance budget tests
 restart: ## Restart the dashboard
 	pkill -f "python3.*dashboard.py" 2>/dev/null; sleep 1; python3 dashboard.py &
 
-install: ## Install dependencies
-	pip3 install -r requirements.txt
+install: ## Install dependencies (creates venv if needed)
+	@if [ ! -d venv ]; then echo "Creating virtual environment..."; python3 -m venv venv; fi
+	venv/bin/pip install -r requirements.txt
+	@echo "\n✅ Installed. Activate with: source venv/bin/activate"
 
 wifi: ## Start on WiFi (accessible from phones on same network)
 	@IP=$$(ipconfig getifaddr en0 2>/dev/null || echo "check-ip"); \
