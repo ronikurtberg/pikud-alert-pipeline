@@ -185,14 +185,16 @@ make install                    # Install Python dependencies
 
 > **Why a virtual environment?** Modern macOS and many Linux distros block `pip install` at the system level ([PEP 668](https://peps.python.org/pep-0668/)). A venv keeps everything isolated and avoids the `externally-managed-environment` error.
 
-**Telegram API key** (free, 2 minutes):
+**Telegram setup** (free, 2 minutes):
 1. Go to [my.telegram.org](https://my.telegram.org) and log in with your phone number
 2. Click **"API development tools"** and create an app
-3. Copy your credentials:
+3. Copy your **app** credentials into `.env`:
 
 ```bash
 cp .env.example .env            # Then edit .env with your api_id and api_hash
 ```
+
+> **Two auth steps — here's why:** The `.env` holds your *app* credentials (identifies your application to Telegram). When you first run the pipeline, you'll also be prompted for your *phone number + verification code* (proves you're a real user). This phone login only happens once — the session is cached after that.
 
 **Run the pipeline:**
 
@@ -201,8 +203,6 @@ source venv/bin/activate        # If not already activated
 make fetch                      # Fetch all 24K+ alerts + build database
 make run                        # Dashboard at http://localhost:5000
 ```
-
-On first run, you'll authenticate once via phone + code. The session is cached.
 
 ---
 
