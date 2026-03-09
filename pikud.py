@@ -554,6 +554,15 @@ def build_database(ver_dir: str, db_path: str, version: str) -> bool:
         print("  No CSV files found.")
         return False
 
+    # Pre-build data contracts — fail fast before touching the DB
+    from data_contracts import check_pre_build, check_post_build, ContractViolation
+    try:
+        check_pre_build(ver_dir)
+        print("  Pre-build contracts: PASSED")
+    except ContractViolation as e:
+        print(f"  Pre-build contracts: FAILED\n{e}")
+        return False
+
     if os.path.exists(db_path):
         os.remove(db_path)
 
@@ -664,6 +673,15 @@ def build_database(ver_dir: str, db_path: str, version: str) -> bool:
     print(f"  DB built: {total_msgs} messages, {total_details} alert details")
     print(f"  Zones: {len(zone_cache)}, Cities: {len(city_cache)}")
     conn.close()
+
+    # Post-build data contracts — catch pipeline logic errors
+    try:
+        check_post_build(db_path)
+        print("  Post-build contracts: PASSED")
+    except ContractViolation as e:
+        print(f"  Post-build contracts: FAILED\n{e}")
+        return False
+
     return True
 
 
