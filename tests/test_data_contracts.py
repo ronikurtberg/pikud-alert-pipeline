@@ -1,8 +1,7 @@
 """Tests for data_contracts.py — proactive data quality checks."""
+
 import csv
-import os
 import sqlite3
-import tempfile
 
 import pytest
 
@@ -16,6 +15,7 @@ from data_contracts import (
 # Fixtures
 # ============================================================
 
+
 @pytest.fixture
 def csv_dir(tmp_path):
     """Create a temp dir with a valid CSV file."""
@@ -23,12 +23,9 @@ def csv_dir(tmp_path):
     with open(csv_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["msg_id", "datetime_utc", "raw_text", "views"])
-        writer.writerow(["1", "2026-03-01 12:00:00",
-                         "🚨 ירי רקטות וטילים (1/3/2026) 12:00 **אזור דרום** אשדוד", "100"])
-        writer.writerow(["2", "2026-03-01 12:05:00",
-                         "🚨 האירוע הסתיים", "50"])
-        writer.writerow(["3", "2026-03-01 13:00:00",
-                         "🚨 ירי רקטות וטילים (1/3/2026) 13:00 **אזור צפון** חיפה", "200"])
+        writer.writerow(["1", "2026-03-01 12:00:00", "🚨 ירי רקטות וטילים (1/3/2026) 12:00 **אזור דרום** אשדוד", "100"])
+        writer.writerow(["2", "2026-03-01 12:05:00", "🚨 האירוע הסתיים", "50"])
+        writer.writerow(["3", "2026-03-01 13:00:00", "🚨 ירי רקטות וטילים (1/3/2026) 13:00 **אזור צפון** חיפה", "200"])
     return tmp_path
 
 
@@ -56,17 +53,18 @@ def good_db(tmp_path):
     conn.execute("INSERT INTO cities VALUES (2, 'חיפה', NULL)")
     conn.execute(
         "INSERT INTO messages VALUES (1, '2026-03-01 12:00:00', '2026-03-01 14:00:00', "
-        "'1/3/2026', '12:00', 'alert', 'rockets', 0, 'ירי רקטות', '100')")
+        "'1/3/2026', '12:00', 'alert', 'rockets', 0, 'ירי רקטות', '100')"
+    )
     conn.execute(
         "INSERT INTO messages VALUES (2, '2026-03-01 12:05:00', '2026-03-01 14:05:00', "
-        "NULL, NULL, 'event_ended', NULL, 0, 'האירוע הסתיים', '50')")
+        "NULL, NULL, 'event_ended', NULL, 0, 'האירוע הסתיים', '50')"
+    )
     conn.execute(
         "INSERT INTO messages VALUES (3, '2026-03-01 13:00:00', '2026-03-01 15:00:00', "
-        "'1/3/2026', '13:00', 'alert', 'rockets', 0, 'ירי רקטות', '200')")
-    conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id, shelter_time) "
-                 "VALUES (1, 1, 1, 'מיידי')")
-    conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id, shelter_time) "
-                 "VALUES (3, 2, 2, '15 שניות')")
+        "'1/3/2026', '13:00', 'alert', 'rockets', 0, 'ירי רקטות', '200')"
+    )
+    conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id, shelter_time) VALUES (1, 1, 1, 'מיידי')")
+    conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id, shelter_time) VALUES (3, 2, 2, '15 שניות')")
     conn.commit()
     conn.close()
     return db_path
@@ -75,6 +73,7 @@ def good_db(tmp_path):
 # ============================================================
 # Pre-build contract tests
 # ============================================================
+
 
 class TestPreBuild:
     def test_valid_csvs_pass(self, csv_dir):
@@ -144,6 +143,7 @@ class TestPreBuild:
 # Post-build contract tests
 # ============================================================
 
+
 class TestPostBuild:
     def test_valid_db_passes(self, good_db):
         """Valid database should pass all post-build checks."""
@@ -152,8 +152,7 @@ class TestPostBuild:
     def test_orphaned_alert_details_msg_id(self, good_db):
         """alert_details referencing non-existent msg_id should fail."""
         conn = sqlite3.connect(good_db)
-        conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id) "
-                     "VALUES (999, 1, 1)")
+        conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id) VALUES (999, 1, 1)")
         conn.commit()
         conn.close()
         with pytest.raises(ContractViolation, match="non-existent msg_id"):
@@ -162,8 +161,7 @@ class TestPostBuild:
     def test_orphaned_alert_details_zone_id(self, good_db):
         """alert_details referencing non-existent zone_id should fail."""
         conn = sqlite3.connect(good_db)
-        conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id) "
-                     "VALUES (1, 999, 1)")
+        conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id) VALUES (1, 999, 1)")
         conn.commit()
         conn.close()
         with pytest.raises(ContractViolation, match="non-existent zone_id"):
@@ -172,8 +170,7 @@ class TestPostBuild:
     def test_orphaned_alert_details_city_id(self, good_db):
         """alert_details referencing non-existent city_id should fail."""
         conn = sqlite3.connect(good_db)
-        conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id) "
-                     "VALUES (1, 1, 999)")
+        conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id) VALUES (1, 1, 999)")
         conn.commit()
         conn.close()
         with pytest.raises(ContractViolation, match="non-existent city_id"):
@@ -185,7 +182,8 @@ class TestPostBuild:
         conn.execute(
             "INSERT INTO messages VALUES (10, '2026-03-02 12:00:00', "
             "'2026-03-02 14:00:00', '2/3/2026', '12:00', 'alert', "
-            "'rockets', 0, 'ירי רקטות', '100')")
+            "'rockets', 0, 'ירי רקטות', '100')"
+        )
         conn.commit()
         conn.close()
         with pytest.raises(ContractViolation, match="zero alert_details"):
@@ -197,9 +195,9 @@ class TestPostBuild:
         conn.execute(
             "INSERT INTO messages VALUES (10, '2026-03-02', "
             "'2026-03-02', 'not-a-date', '12:00', 'alert', "
-            "'rockets', 0, 'ירי רקטות', '100')")
-        conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id) "
-                     "VALUES (10, 1, 1)")
+            "'rockets', 0, 'ירי רקטות', '100')"
+        )
+        conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id) VALUES (10, 1, 1)")
         conn.commit()
         conn.close()
         with pytest.raises(ContractViolation, match="unparseable alert_date"):
@@ -208,8 +206,7 @@ class TestPostBuild:
     def test_null_zone_id_fails(self, good_db):
         """NULL zone_id in alert_details should fail."""
         conn = sqlite3.connect(good_db)
-        conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id) "
-                     "VALUES (1, NULL, 1)")
+        conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id) VALUES (1, NULL, 1)")
         conn.commit()
         conn.close()
         with pytest.raises(ContractViolation, match="NULL zone_id"):
@@ -218,8 +215,7 @@ class TestPostBuild:
     def test_null_city_id_fails(self, good_db):
         """NULL city_id in alert_details should fail."""
         conn = sqlite3.connect(good_db)
-        conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id) "
-                     "VALUES (1, 1, NULL)")
+        conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id) VALUES (1, 1, NULL)")
         conn.commit()
         conn.close()
         with pytest.raises(ContractViolation, match="NULL city_id"):
@@ -231,7 +227,8 @@ class TestPostBuild:
         conn.execute(
             "INSERT INTO messages VALUES (10, '2026-03-02', "
             "'2026-03-02', NULL, NULL, 'bogus_type', "
-            "NULL, 0, 'some text', '100')")
+            "NULL, 0, 'some text', '100')"
+        )
         conn.commit()
         conn.close()
         with pytest.raises(ContractViolation, match="Unknown message_type"):
