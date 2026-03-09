@@ -1,0 +1,42 @@
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+exclude = [
+    "venv",
+    ".venv",
+    "_private",
+    "__pycache__",
+    ".pytest_cache",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort (import ordering)
+    "S",   # bandit (security)
+    "B",   # bugbear (common bugs)
+]
+ignore = [
+    "E402",  # module-import-not-at-top — intentional (load_dotenv before flask)
+    "E501",  # line-too-long — handled by formatter
+    "S101",  # assert — used in tests
+    "S104",  # hardcoded-bind-all-interfaces — Flask dev server, intentional
+    "S110",  # try-except-pass — used for optional parsing fallbacks
+    "S311",  # non-cryptographic random — used for audit sampling, not security
+    "S603",  # subprocess-without-shell-eq — not relevant
+    "S607",  # start-process-with-partial-path — not relevant
+    "S608",  # hardcoded-sql — this project uses SQLite directly, all SQL is internal
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,102 +1,102 @@
 """Tests for message classification, date extraction, and zone/city parsing."""
-import pytest
-import sys
+
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pikud import classify_message, extract_date_time, extract_zones_and_cities, parse_cities
-
 
 # ============================================================
 # classify_message
 # ============================================================
 
+
 class TestClassifyMessage:
     """Test message type and alert type classification."""
 
     def test_rocket_alert(self):
-        text = '🚨 **ירי רקטות וטילים [7/8/2022] 8:13** **אזור שפלת יהודה** נווה אילן'
+        text = "🚨 **ירי רקטות וטילים [7/8/2022] 8:13** **אזור שפלת יהודה** נווה אילן"
         msg_type, alert_type, is_drill = classify_message(text)
         assert msg_type == "alert"
         assert alert_type == "rockets"
         assert is_drill is False
 
     def test_aircraft_alert(self):
-        text = '✈ **חדירת כלי טיס עוין (6/3/2026) 22:07** **אזור קו העימות** קריית שמונה'
+        text = "✈ **חדירת כלי טיס עוין (6/3/2026) 22:07** **אזור קו העימות** קריית שמונה"
         msg_type, alert_type, is_drill = classify_message(text)
         assert msg_type == "alert"
         assert alert_type == "aircraft"
 
     def test_earthquake_alert(self):
-        text = '🚨 **רעידת אדמה [5/2/2024] 10:00** **אזור ים המלח** ערד'
+        text = "🚨 **רעידת אדמה [5/2/2024] 10:00** **אזור ים המלח** ערד"
         msg_type, alert_type, is_drill = classify_message(text)
         assert msg_type == "alert"
         assert alert_type == "earthquake"
 
     def test_hazmat_alert(self):
-        text = '🚨 **חומרים מסוכנים [1/1/2024] 12:00** **אזור חיפה** חיפה'
+        text = "🚨 **חומרים מסוכנים [1/1/2024] 12:00** **אזור חיפה** חיפה"
         msg_type, alert_type, is_drill = classify_message(text)
         assert msg_type == "alert"
         assert alert_type == "hazmat"
 
     def test_infiltration_alert(self):
-        text = '🚨 **חדירת מחבלים [7/10/2023] 06:29** **אזור עוטף עזה** שדרות'
+        text = "🚨 **חדירת מחבלים [7/10/2023] 06:29** **אזור עוטף עזה** שדרות"
         msg_type, alert_type, is_drill = classify_message(text)
         assert msg_type == "alert"
         assert alert_type == "infiltration"
 
     def test_event_ended(self):
-        text = '🚨 **עדכון (6/3/2026) 22:18** **האירוע הסתיים** השוהים במרחב המוגן יכולים לצאת.'
+        text = "🚨 **עדכון (6/3/2026) 22:18** **האירוע הסתיים** השוהים במרחב המוגן יכולים לצאת."
         msg_type, alert_type, is_drill = classify_message(text)
         assert msg_type == "event_ended"
 
     def test_heads_up(self):
-        text = '🚨 **מבזק (6/3/2026) 21:54** **בדקות הקרובות צפויות להתקבל התרעות באזורך**'
+        text = "🚨 **מבזק (6/3/2026) 21:54** **בדקות הקרובות צפויות להתקבל התרעות באזורך**"
         msg_type, alert_type, is_drill = classify_message(text)
         assert msg_type == "heads_up"
 
     def test_can_leave_shelter(self):
-        text = 'ניתן לצאת מהמרחב המוגן. אין הגבלות.'
+        text = "ניתן לצאת מהמרחב המוגן. אין הגבלות."
         msg_type, alert_type, is_drill = classify_message(text)
         assert msg_type == "can_leave_shelter"
 
     def test_drill(self):
-        text = '**תרגיל! תרגיל! תרגיל!** 🚨 **ירי רקטות וטילים [16/5/2022] 10:35** **אזור דן** תל אביב'
+        text = "**תרגיל! תרגיל! תרגיל!** 🚨 **ירי רקטות וטילים [16/5/2022] 10:35** **אזור דן** תל אביב"
         msg_type, alert_type, is_drill = classify_message(text)
         assert msg_type == "alert"
         assert alert_type == "rockets"
         assert is_drill is True
 
     def test_update(self):
-        text = '🚨 **עדכון פיקוד העורף** - מצב ההתרעות באזור הדרום'
+        text = "🚨 **עדכון פיקוד העורף** - מצב ההתרעות באזור הדרום"
         msg_type, alert_type, is_drill = classify_message(text)
         assert msg_type == "update"
 
     def test_intercept_report(self):
-        text = 'דיווח על יירוט מוצלח מעל שמי הצפון'
+        text = "דיווח על יירוט מוצלח מעל שמי הצפון"
         msg_type, alert_type, is_drill = classify_message(text)
         assert msg_type == "intercept_report"
 
     def test_instructions(self):
-        text = 'הנחיות פיקוד העורף למרחב הצפוני'
+        text = "הנחיות פיקוד העורף למרחב הצפוני"
         msg_type, alert_type, is_drill = classify_message(text)
         assert msg_type == "instructions"
 
     def test_other(self):
-        text = 'הודעה כללית שלא מתאימה לשום קטגוריה'
+        text = "הודעה כללית שלא מתאימה לשום קטגוריה"
         msg_type, alert_type, is_drill = classify_message(text)
         assert msg_type == "other"
         assert alert_type is None
 
     def test_alert_type_none_for_non_alert(self):
-        text = '🚨 **עדכון (6/3/2026)** **האירוע הסתיים**'
+        text = "🚨 **עדכון (6/3/2026)** **האירוע הסתיים**"
         _, alert_type, _ = classify_message(text)
         # event_ended doesn't have a threat type
         assert alert_type is None
 
     def test_drill_flag_independent_of_type(self):
         """Drill flag should be set even for non-alert messages."""
-        text = 'תרגיל - הנחיות פיקוד העורף'
+        text = "תרגיל - הנחיות פיקוד העורף"
         _, _, is_drill = classify_message(text)
         assert is_drill is True
 
@@ -105,30 +105,31 @@ class TestClassifyMessage:
 # extract_date_time
 # ============================================================
 
+
 class TestExtractDateTime:
     """Test date/time extraction from different message formats."""
 
     def test_bracket_format(self):
-        text = '🚨 **ירי רקטות וטילים [7/8/2022] 8:13** **אזור X**'
+        text = "🚨 **ירי רקטות וטילים [7/8/2022] 8:13** **אזור X**"
         date, time = extract_date_time(text)
         assert date == "7/8/2022"
         assert time == "8:13"
 
     def test_paren_format(self):
-        text = '🚨 ירי רקטות וטילים (28/2/2026) 11:29 **אזור ירושלים**'
+        text = "🚨 ירי רקטות וטילים (28/2/2026) 11:29 **אזור ירושלים**"
         date, time = extract_date_time(text)
         assert date == "28/2/2026"
         assert time == "11:29"
 
     def test_no_date(self):
-        text = 'האירוע הסתיים. ניתן לצאת מהמרחב.'
+        text = "האירוע הסתיים. ניתן לצאת מהמרחב."
         date, time = extract_date_time(text)
         assert date is None
         assert time is None
 
     def test_with_beshaa(self):
         """Old format with 'בשעה' prefix."""
-        text = '🚨 **עדכון - התרעות** 🚨 [15/11/2019] בשעה 14:52'
+        text = "🚨 **עדכון - התרעות** 🚨 [15/11/2019] בשעה 14:52"
         date, time = extract_date_time(text)
         assert date == "15/11/2019"
         assert time == "14:52"
@@ -138,11 +139,14 @@ class TestExtractDateTime:
 # extract_zones_and_cities
 # ============================================================
 
+
 class TestExtractZonesAndCities:
     """Test zone and city extraction from alert messages."""
 
     def test_single_zone_single_city(self):
-        text = '🚨 **ירי רקטות וטילים [23/10/2024] 14:52** **אזור קו העימות** קריית שמונה (מיידי) **היכנסו למרחב המוגן**'
+        text = (
+            "🚨 **ירי רקטות וטילים [23/10/2024] 14:52** **אזור קו העימות** קריית שמונה (מיידי) **היכנסו למרחב המוגן**"
+        )
         results = extract_zones_and_cities(text)
         assert len(results) == 1
         zone, cities = results[0]
@@ -150,7 +154,7 @@ class TestExtractZonesAndCities:
         assert any("קריית שמונה" in c[0] for c in cities)
 
     def test_single_zone_multiple_cities(self):
-        text = '🚨 **ירי רקטות וטילים [13/5/2023] 12:56** **אזור לכיש** בית עזרא (45 שניות) אשדוד - ג,ו,ז (45 שניות) אמונים (45 שניות) **היכנסו למרחב המוגן**'
+        text = "🚨 **ירי רקטות וטילים [13/5/2023] 12:56** **אזור לכיש** בית עזרא (45 שניות) אשדוד - ג,ו,ז (45 שניות) אמונים (45 שניות) **היכנסו למרחב המוגן**"
         results = extract_zones_and_cities(text)
         assert len(results) == 1
         zone, cities = results[0]
@@ -158,7 +162,7 @@ class TestExtractZonesAndCities:
         assert len(cities) >= 3
 
     def test_multiple_zones(self):
-        text = '🚨 **ירי רקטות וטילים (28/2/2026) 11:29** **אזור ירושלים** אבן ספיר, אורה (**דקה וחצי**) **אזור שומרון** בית חורון (**דקה וחצי**) **אזור שפלת יהודה** עין נקובא (**דקה וחצי**) **היכנסו למרחב המוגן.**'
+        text = "🚨 **ירי רקטות וטילים (28/2/2026) 11:29** **אזור ירושלים** אבן ספיר, אורה (**דקה וחצי**) **אזור שומרון** בית חורון (**דקה וחצי**) **אזור שפלת יהודה** עין נקובא (**דקה וחצי**) **היכנסו למרחב המוגן.**"
         results = extract_zones_and_cities(text)
         assert len(results) == 3
         zone_names = [r[0] for r in results]
@@ -167,13 +171,13 @@ class TestExtractZonesAndCities:
         assert "אזור שפלת יהודה" in zone_names
 
     def test_no_zones_in_non_alert(self):
-        text = 'האירוע הסתיים. השוהים במרחב המוגן יכולים לצאת.'
+        text = "האירוע הסתיים. השוהים במרחב המוגן יכולים לצאת."
         results = extract_zones_and_cities(text)
         assert len(results) == 0
 
     def test_city_name_with_azon_prefix(self):
         """City names starting with 'אזור' (like 'אזור תעשייה') should not be confused with zones."""
-        text = '🚨 **ירי רקטות וטילים** **אזור לכיש** אזור תעשייה הדרומי אשקלון (45 שניות) **היכנסו**'
+        text = "🚨 **ירי רקטות וטילים** **אזור לכיש** אזור תעשייה הדרומי אשקלון (45 שניות) **היכנסו**"
         results = extract_zones_and_cities(text)
         assert len(results) == 1
         zone, cities = results[0]
@@ -183,7 +187,7 @@ class TestExtractZonesAndCities:
         assert any("אזור תעשייה" in cn for cn in city_names)
 
     def test_shelter_time_extraction(self):
-        text = '**אזור קו העימות** קריית שמונה (מיידי) נאות מרדכי (15 שניות) **היכנסו**'
+        text = "**אזור קו העימות** קריית שמונה (מיידי) נאות מרדכי (15 שניות) **היכנסו**"
         results = extract_zones_and_cities(text)
         assert len(results) == 1
         _, cities = results[0]
@@ -195,6 +199,7 @@ class TestExtractZonesAndCities:
 # ============================================================
 # parse_cities
 # ============================================================
+
 
 class TestParseCities:
     """Test city name parsing from text blocks."""
@@ -332,7 +337,8 @@ class TestParseCities:
     def test_fallback_zone_parser_no_bold(self):
         """Fallback zone parsing when no bold markers present."""
         from pikud import extract_zones_and_cities
-        text = 'אזור קו העימות נהריה סער עברון'
+
+        text = "אזור קו העימות נהריה סער עברון"
         results = extract_zones_and_cities(text)
         assert len(results) == 1
         zone, cities = results[0]

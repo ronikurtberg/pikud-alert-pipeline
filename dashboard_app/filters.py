@@ -1,4 +1,5 @@
 """Filter clause builders for dashboard queries."""
+
 from flask import request
 
 
@@ -19,10 +20,14 @@ def build_filter_clause(prefix: str = "m") -> tuple[str, list]:
         clauses.append(f"{prefix}.message_type = ?")
         params.append(request.args["message_type"])
     if request.args.get("city"):
-        clauses.append(f"{prefix}.msg_id IN (SELECT ad.msg_id FROM alert_details ad JOIN cities c ON ad.city_id=c.city_id WHERE c.city_name=?)")
+        clauses.append(
+            f"{prefix}.msg_id IN (SELECT ad.msg_id FROM alert_details ad JOIN cities c ON ad.city_id=c.city_id WHERE c.city_name=?)"
+        )
         params.append(request.args["city"])
     if request.args.get("zone"):
-        clauses.append(f"{prefix}.msg_id IN (SELECT ad.msg_id FROM alert_details ad JOIN zones z ON ad.zone_id=z.zone_id WHERE z.zone_name=?)")
+        clauses.append(
+            f"{prefix}.msg_id IN (SELECT ad.msg_id FROM alert_details ad JOIN zones z ON ad.zone_id=z.zone_id WHERE z.zone_name=?)"
+        )
         params.append(request.args["zone"])
     return (" AND " + " AND ".join(clauses)) if clauses else "", params
 

@@ -3,10 +3,12 @@
 Tests in this file require a populated database. Run 'make fetch' first.
 Without data, these tests are automatically skipped.
 """
-import pytest
+
 import json
-import sys
 import os
+import sys
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -71,7 +73,9 @@ class TestFilteredCounts:
         assert d["city_alerts"] > 0
 
     def test_zone_filter(self, client):
-        r = client.get("/api/filtered_counts?zone=%D7%90%D7%96%D7%95%D7%A8+%D7%A7%D7%95+%D7%94%D7%A2%D7%99%D7%9E%D7%95%D7%AA")
+        r = client.get(
+            "/api/filtered_counts?zone=%D7%90%D7%96%D7%95%D7%A8+%D7%A7%D7%95+%D7%94%D7%A2%D7%99%D7%9E%D7%95%D7%AA"
+        )
         d = json.loads(r.data)
         assert d["attack_events"] > 0
 
@@ -88,14 +92,18 @@ class TestFilteredCounts:
 
     def test_combined_city_and_date_filter(self, client):
         """Regression: city filter should persist when date filter is also active."""
-        r = client.get("/api/filtered_counts?date_from=2024-01-01&city=%D7%A7%D7%A8%D7%99%D7%99%D7%AA+%D7%A9%D7%9E%D7%95%D7%A0%D7%94")
+        r = client.get(
+            "/api/filtered_counts?date_from=2024-01-01&city=%D7%A7%D7%A8%D7%99%D7%99%D7%AA+%D7%A9%D7%9E%D7%95%D7%A0%D7%94"
+        )
         d = json.loads(r.data)
         assert d["city_alerts"] > 0
         # City alerts should be reasonably scoped (not all cities in matching messages)
         assert d["city_alerts"] < 5000  # Kiryat Shmona alone shouldn't have 5K+
 
     def test_combined_zone_and_type_filter(self, client):
-        r = client.get("/api/filtered_counts?alert_type=aircraft&zone=%D7%90%D7%96%D7%95%D7%A8+%D7%92%D7%9C%D7%99%D7%9C+%D7%A2%D7%9C%D7%99%D7%95%D7%9F")
+        r = client.get(
+            "/api/filtered_counts?alert_type=aircraft&zone=%D7%90%D7%96%D7%95%D7%A8+%D7%92%D7%9C%D7%99%D7%9C+%D7%A2%D7%9C%D7%99%D7%95%D7%9F"
+        )
         d = json.loads(r.data)
         assert d["attack_events"] > 0
 
@@ -117,13 +125,25 @@ class TestVisualizationEndpoints:
     """Test all visualization endpoints return 200 with valid data."""
 
     ENDPOINTS = [
-        "/api/viz/hourly", "/api/viz/daily", "/api/viz/top_cities",
-        "/api/viz/zones", "/api/viz/monthly", "/api/viz/shelter_times",
-        "/api/viz/dow", "/api/viz/escalation", "/api/viz/city_timeline",
-        "/api/viz/alert_vs_ended", "/api/viz/safest_hours", "/api/viz/safest_10min",
-        "/api/viz/city_safety_rank", "/api/viz/drone_cities",
-        "/api/viz/city_zone_anomaly", "/api/viz/response_time",
-        "/api/viz/multi_zone", "/api/viz/streaks", "/api/viz/calendar",
+        "/api/viz/hourly",
+        "/api/viz/daily",
+        "/api/viz/top_cities",
+        "/api/viz/zones",
+        "/api/viz/monthly",
+        "/api/viz/shelter_times",
+        "/api/viz/dow",
+        "/api/viz/escalation",
+        "/api/viz/city_timeline",
+        "/api/viz/alert_vs_ended",
+        "/api/viz/safest_hours",
+        "/api/viz/safest_10min",
+        "/api/viz/city_safety_rank",
+        "/api/viz/drone_cities",
+        "/api/viz/city_zone_anomaly",
+        "/api/viz/response_time",
+        "/api/viz/multi_zone",
+        "/api/viz/streaks",
+        "/api/viz/calendar",
     ]
 
     @pytest.mark.parametrize("endpoint", ENDPOINTS)
@@ -202,7 +222,7 @@ class TestMetadataEndpoints:
         assert r.status_code == 200
         d = json.loads(r.data)
         assert len(d) >= 15
-        for key, meta in d.items():
+        for _key, meta in d.items():
             assert "dimensions" in meta
             assert "measures" in meta
             assert "sql" in meta
@@ -253,8 +273,14 @@ class TestPipelineEndpoints:
         assert v["db_exists"] is True
 
     def test_validation_checks(self, client):
-        checks = ["csv_files_exist", "no_duplicate_ids", "db_msg_count",
-                   "no_orphan_details", "deltas_in_db", "db_version_match"]
+        checks = [
+            "csv_files_exist",
+            "no_duplicate_ids",
+            "db_msg_count",
+            "no_orphan_details",
+            "deltas_in_db",
+            "db_version_match",
+        ]
         for check in checks:
             r = client.post(f"/api/pipeline/validate/{check}")
             assert r.status_code == 200
@@ -304,7 +330,9 @@ class TestAlertDrilldown:
         assert ids == sorted(ids, reverse=True)
 
     def test_drilldown_with_city_filter(self, client):
-        r = client.get("/api/alerts/drilldown?city=%D7%A7%D7%A8%D7%99%D7%99%D7%AA+%D7%A9%D7%9E%D7%95%D7%A0%D7%94&limit=5")
+        r = client.get(
+            "/api/alerts/drilldown?city=%D7%A7%D7%A8%D7%99%D7%99%D7%AA+%D7%A9%D7%9E%D7%95%D7%A0%D7%94&limit=5"
+        )
         d = json.loads(r.data)
         assert d["total"] > 0
         for a in d["alerts"]:
@@ -378,7 +406,9 @@ class TestExport:
     """Test CSV data export functionality."""
 
     def test_full_export(self, client):
-        import zipfile, io
+        import io
+        import zipfile
+
         r = client.get("/api/export/full")
         assert r.status_code == 200
         assert r.content_type == "application/zip"
@@ -387,7 +417,9 @@ class TestExport:
         assert "with_calculated/manifest.json" in z.namelist()
 
     def test_raw_export(self, client):
-        import zipfile, io
+        import io
+        import zipfile
+
         r = client.get("/api/export/raw")
         assert r.status_code == 200
         z = zipfile.ZipFile(io.BytesIO(r.data))
@@ -399,7 +431,9 @@ class TestExport:
         assert "msg_id" in header
 
     def test_raw_manifest_has_tableau_formulas(self, client):
-        import zipfile, io
+        import io
+        import zipfile
+
         r = client.get("/api/export/raw")
         z = zipfile.ZipFile(io.BytesIO(r.data))
         manifest = json.loads(z.read("raw_only/manifest.json"))
@@ -409,7 +443,9 @@ class TestExport:
         assert "message_type" in calc
 
     def test_full_manifest_has_relationships(self, client):
-        import zipfile, io
+        import io
+        import zipfile
+
         r = client.get("/api/export/full")
         z = zipfile.ZipFile(io.BytesIO(r.data))
         manifest = json.loads(z.read("with_calculated/manifest.json"))
@@ -423,7 +459,9 @@ class TestExport:
 
     def test_full_export_all_tables(self, client):
         """Full export should contain all 4 tables as CSVs."""
-        import zipfile, io
+        import io
+        import zipfile
+
         r = client.get("/api/export/full")
         z = zipfile.ZipFile(io.BytesIO(r.data))
         for table in ["messages", "alert_details", "cities", "zones"]:
@@ -431,7 +469,9 @@ class TestExport:
 
     def test_raw_export_all_tables(self, client):
         """Raw export should contain all 4 tables as CSVs."""
-        import zipfile, io
+        import io
+        import zipfile
+
         r = client.get("/api/export/raw")
         z = zipfile.ZipFile(io.BytesIO(r.data))
         for table in ["messages", "alert_details", "cities", "zones"]:
@@ -439,7 +479,9 @@ class TestExport:
 
     def test_full_export_has_calculated_fields(self, client):
         """Full export CSV should include calculated columns."""
-        import zipfile, io
+        import io
+        import zipfile
+
         r = client.get("/api/export/full")
         z = zipfile.ZipFile(io.BytesIO(r.data))
         header = z.read("with_calculated/messages.csv").decode().split("\n")[0]
@@ -450,7 +492,9 @@ class TestExport:
 
     def test_raw_export_cities_no_canonical(self, client):
         """Raw export should strip canonical_name from cities."""
-        import zipfile, io
+        import io
+        import zipfile
+
         r = client.get("/api/export/raw")
         z = zipfile.ZipFile(io.BytesIO(r.data))
         header = z.read("raw_only/cities.csv").decode().split("\n")[0]
@@ -460,7 +504,9 @@ class TestExport:
 
     def test_manifest_semantic_model_fields(self, client):
         """Manifest should include semantic model calculated fields matching the deployed SDM."""
-        import zipfile, io
+        import io
+        import zipfile
+
         r = client.get("/api/export/raw")
         z = zipfile.ZipFile(io.BytesIO(r.data))
         manifest = json.loads(z.read("raw_only/manifest.json"))
@@ -478,18 +524,23 @@ class TestExport:
 
     def test_manifest_has_tableau_next_names(self, client):
         """Raw manifest calculated fields should include Tableau Next field names."""
-        import zipfile, io
+        import io
+        import zipfile
+
         r = client.get("/api/export/raw")
         z = zipfile.ZipFile(io.BytesIO(r.data))
         manifest = json.loads(z.read("raw_only/manifest.json"))
         calc = manifest["tables"]["messages"]["calculated_fields_to_add"]
-        for field_name, info in calc.items():
+        for _field_name, info in calc.items():
             assert "tableau_formula" in info
             assert "source_field" in info
 
     def test_export_csv_row_counts(self, client):
         """Export CSV row counts should match manifest row_count."""
-        import zipfile, io, csv
+        import csv
+        import io
+        import zipfile
+
         r = client.get("/api/export/full")
         z = zipfile.ZipFile(io.BytesIO(r.data))
         manifest = json.loads(z.read("with_calculated/manifest.json"))
@@ -501,7 +552,9 @@ class TestExport:
 
     def test_export_primary_keys_marked(self, client):
         """Manifest should mark primary key fields."""
-        import zipfile, io
+        import io
+        import zipfile
+
         r = client.get("/api/export/full")
         z = zipfile.ZipFile(io.BytesIO(r.data))
         manifest = json.loads(z.read("with_calculated/manifest.json"))
@@ -535,16 +588,16 @@ class TestTableauTab:
 
 class TestSQLQuery:
     def test_read_query(self, client):
-        r = client.post("/api/query",
-                        data=json.dumps({"sql": "SELECT COUNT(*) as c FROM messages"}),
-                        content_type="application/json")
+        r = client.post(
+            "/api/query",
+            data=json.dumps({"sql": "SELECT COUNT(*) as c FROM messages"}),
+            content_type="application/json",
+        )
         assert r.status_code == 200
         d = json.loads(r.data)
         assert d["count"] == 1
         assert d["rows"][0][0] > 0
 
     def test_write_blocked(self, client):
-        r = client.post("/api/query",
-                        data=json.dumps({"sql": "DELETE FROM messages"}),
-                        content_type="application/json")
+        r = client.post("/api/query", data=json.dumps({"sql": "DELETE FROM messages"}), content_type="application/json")
         assert r.status_code == 403

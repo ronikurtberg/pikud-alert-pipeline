@@ -1,8 +1,10 @@
 """Shared fixtures for all tests."""
+
 import os
-import sys
 import sqlite3
+import sys
 import tempfile
+
 import pytest
 
 # Add project root to path
@@ -10,7 +12,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Marker: skip tests that require a populated database
 _db_dir = os.path.join(os.path.dirname(__file__), "db")
-_has_db = os.path.exists(_db_dir) and any(f.endswith(".db") for f in os.listdir(_db_dir)) if os.path.exists(_db_dir) else False
+_has_db = (
+    os.path.exists(_db_dir) and any(f.endswith(".db") for f in os.listdir(_db_dir))
+    if os.path.exists(_db_dir)
+    else False
+)
 
 requires_db = pytest.mark.skipif(not _has_db, reason="No database found — run 'make fetch' first")
 
@@ -49,6 +55,7 @@ def temp_db():
 def app():
     """Flask test app."""
     import dashboard
+
     dashboard.reset_shared_db()
     dashboard.app.config["TESTING"] = True
     return dashboard.app
