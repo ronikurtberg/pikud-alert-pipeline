@@ -1,4 +1,5 @@
 """Database connection management, query helpers, and SQL latency tracking."""
+
 import json
 import os
 import sqlite3
@@ -54,6 +55,7 @@ def get_sql_summary() -> dict:
 
     ms_vals = sorted(e["ms"] for e in stats)
     n = len(ms_vals)
+
     def pct(p):
         return round(ms_vals[min(int(n * p / 100), n - 1)], 1)
 
@@ -62,8 +64,15 @@ def get_sql_summary() -> dict:
     for e in stats:
         key = e["sql"][:200]
         if key not in by_sql:
-            by_sql[key] = {"sql": e["sql"], "calls": 0, "total_ms": 0, "max_ms": 0,
-                           "min_ms": 999999, "total_rows": 0, "total_bytes": 0}
+            by_sql[key] = {
+                "sql": e["sql"],
+                "calls": 0,
+                "total_ms": 0,
+                "max_ms": 0,
+                "min_ms": 999999,
+                "total_rows": 0,
+                "total_bytes": 0,
+            }
         s = by_sql[key]
         s["calls"] += 1
         s["total_ms"] += e["ms"]

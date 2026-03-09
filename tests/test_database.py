@@ -2,10 +2,9 @@
 
 Requires a populated database. Run 'make fetch' first.
 """
-import pytest
-import sqlite3
-import sys
+
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -18,9 +17,9 @@ class TestSchema:
     """Verify the database schema is correct."""
 
     def test_tables_exist(self, real_db):
-        tables = [r[0] for r in real_db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-        ).fetchall()]
+        tables = [
+            r[0] for r in real_db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
+        ]
         assert "messages" in tables
         assert "alert_details" in tables
         assert "cities" in tables
@@ -28,16 +27,17 @@ class TestSchema:
         assert "db_info" in tables
 
     def test_views_exist(self, real_db):
-        views = [r[0] for r in real_db.execute(
-            "SELECT name FROM sqlite_master WHERE type='view'"
-        ).fetchall()]
+        views = [r[0] for r in real_db.execute("SELECT name FROM sqlite_master WHERE type='view'").fetchall()]
         assert "v_alerts_full" in views
         assert "v_city_alert_counts" in views
 
     def test_indexes_exist(self, real_db):
-        indexes = [r[0] for r in real_db.execute(
-            "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%'"
-        ).fetchall()]
+        indexes = [
+            r[0]
+            for r in real_db.execute(
+                "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+        ]
         assert "idx_messages_alert_filter" in indexes
         assert "idx_ad_msg_city_zone" in indexes
         assert "idx_messages_type_time" in indexes
@@ -48,8 +48,18 @@ class TestSchema:
 
     def test_messages_columns(self, real_db):
         cols = [r[1] for r in real_db.execute("PRAGMA table_info(messages)").fetchall()]
-        expected = ["msg_id", "datetime_utc", "datetime_israel", "alert_date",
-                    "alert_time_local", "message_type", "alert_type", "is_drill", "raw_text", "views"]
+        expected = [
+            "msg_id",
+            "datetime_utc",
+            "datetime_israel",
+            "alert_date",
+            "alert_time_local",
+            "message_type",
+            "alert_type",
+            "is_drill",
+            "raw_text",
+            "views",
+        ]
         for c in expected:
             assert c in cols, f"Missing column: {c}"
 
@@ -82,9 +92,7 @@ class TestDataIntegrity:
         assert bad == 0
 
     def test_no_duplicate_msg_ids(self, real_db):
-        dupes = real_db.execute(
-            "SELECT msg_id, COUNT(*) c FROM messages GROUP BY msg_id HAVING c > 1"
-        ).fetchall()
+        dupes = real_db.execute("SELECT msg_id, COUNT(*) c FROM messages GROUP BY msg_id HAVING c > 1").fetchall()
         assert len(dupes) == 0
 
     def test_msg_ids_are_positive(self, real_db):
@@ -98,9 +106,7 @@ class TestDataIntegrity:
         assert bad == 0
 
     def test_is_drill_is_boolean(self, real_db):
-        bad = real_db.execute(
-            "SELECT COUNT(*) FROM messages WHERE is_drill NOT IN (0, 1)"
-        ).fetchone()[0]
+        bad = real_db.execute("SELECT COUNT(*) FROM messages WHERE is_drill NOT IN (0, 1)").fetchone()[0]
         assert bad == 0
 
 
@@ -117,16 +123,15 @@ class TestDataCounts:
         assert details > msgs * 5  # avg ~14 details per alert message
 
     def test_all_message_types_present(self, real_db):
-        types = [r[0] for r in real_db.execute(
-            "SELECT DISTINCT message_type FROM messages"
-        ).fetchall()]
+        types = [r[0] for r in real_db.execute("SELECT DISTINCT message_type FROM messages").fetchall()]
         for expected in ["alert", "event_ended", "heads_up", "update"]:
             assert expected in types
 
     def test_all_alert_types_present(self, real_db):
-        types = [r[0] for r in real_db.execute(
-            "SELECT DISTINCT alert_type FROM messages WHERE alert_type IS NOT NULL"
-        ).fetchall()]
+        types = [
+            r[0]
+            for r in real_db.execute("SELECT DISTINCT alert_type FROM messages WHERE alert_type IS NOT NULL").fetchall()
+        ]
         assert "rockets" in types
         assert "aircraft" in types
 
@@ -168,9 +173,7 @@ class TestCityCanonicalization:
 
     def test_dash_maps_to_space(self, real_db):
         """Dash variant should map to space variant as canonical."""
-        row = real_db.execute(
-            "SELECT canonical_name FROM cities WHERE city_name='אבו-גוש'"
-        ).fetchone()
+        row = real_db.execute("SELECT canonical_name FROM cities WHERE city_name='אבו-גוש'").fetchone()
         assert row is not None
         assert row["canonical_name"] == "אבו גוש"
 
@@ -182,13 +185,13 @@ class TestCityCanonicalization:
     def test_top_cities_uses_canonical(self, client):
         """Top cities visualization should show canonical names (no duplicates)."""
         import json
+
         r = client.get("/api/viz/top_cities?limit=100")
         d = json.loads(r.data)
         names = [c["city_name"] for c in d]
         # No dash variants should appear — only canonical (space) versions
         for name in names:
-            assert '-' not in name or name.count('-') == name.count(' - '), \
-                f"Dash variant leaked into display: {name}"
+            assert "-" not in name or name.count("-") == name.count(" - "), f"Dash variant leaked into display: {name}"
 
 
 class TestCalculatedFields:
@@ -208,15 +211,11 @@ class TestCalculatedFields:
 
     def test_alert_type_matches_text(self, real_db):
         """Spot check: rockets type should have רקטות in text."""
-        rows = real_db.execute(
-            "SELECT raw_text FROM messages WHERE alert_type='rockets' LIMIT 10"
-        ).fetchall()
+        rows = real_db.execute("SELECT raw_text FROM messages WHERE alert_type='rockets' LIMIT 10").fetchall()
         for r in rows:
             assert "רקטות" in r["raw_text"]
 
     def test_aircraft_type_matches_text(self, real_db):
-        rows = real_db.execute(
-            "SELECT raw_text FROM messages WHERE alert_type='aircraft' LIMIT 10"
-        ).fetchall()
+        rows = real_db.execute("SELECT raw_text FROM messages WHERE alert_type='aircraft' LIMIT 10").fetchall()
         for r in rows:
             assert "כלי טיס" in r["raw_text"]

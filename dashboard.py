@@ -22,21 +22,29 @@ import os
 import queue
 import sqlite3
 import subprocess
-import time
 import sys
 import threading
+import time
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 
 # Import from extracted modules
 from dashboard_app.db import (
-    get_db, get_shared_db, reset_shared_db, query_db, get_db_path,
-    get_sql_stats, get_sql_summary, SQL_LOG_PATH,
-    BASE_DIR, DB_DIR, DATA_DIR, LOGS_DIR,
+    BASE_DIR,
+    DATA_DIR,
+    DB_DIR,
+    LOGS_DIR,
+    get_db,
+    get_db_path,
+    get_shared_db,
+    get_sql_summary,
+    query_db,
+    reset_shared_db,
 )
 
 app = Flask(__name__)
@@ -49,24 +57,26 @@ pipeline_lock = threading.Lock()
 pipeline_running = False
 pipeline_subscribers = []
 
+
 # Request timing middleware
 @app.before_request
 def _start_timer():
     request._start_time = time.time()
 
+
 @app.after_request
 def _log_timing(response):
-    if hasattr(request, '_start_time'):
+    if hasattr(request, "_start_time"):
         elapsed = (time.time() - request._start_time) * 1000
-        if request.path.startswith('/api/'):
+        if request.path.startswith("/api/"):
             app.logger.info(f"[TIMING] {request.method} {request.path} → {elapsed:.0f}ms")
-            response.headers['X-Response-Time'] = f"{elapsed:.0f}ms"
+            response.headers["X-Response-Time"] = f"{elapsed:.0f}ms"
     return response
 
 
 # DB functions, filter builders, and metadata are imported from dashboard_app/
 # (see imports at top of file)
-from dashboard_app.filters import build_filter_clause, build_detail_filter_clause
+from dashboard_app.filters import build_detail_filter_clause, build_filter_clause
 
 # Canonical city name expression — uses canonical_name if set, falls back to city_name
 CITY_DISPLAY = "COALESCE(c.canonical_name, c.city_name)"
@@ -94,12 +104,13 @@ def resolve_dynamic_date(val):
     """Resolve dynamic date placeholders."""
     if val == "__LAST_7D__":
         from datetime import timedelta
+
         return (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
     if val == "__LAST_30D__":
         from datetime import timedelta
+
         return (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
     return val
-
 
 
 # build_filter_clause and build_detail_filter_clause imported from dashboard_app.filters
@@ -118,6 +129,7 @@ def log_pipeline(level, msg):
 # ============================================================
 # PAGES
 # ============================================================
+
 
 @app.route("/")
 def index():
@@ -156,14 +168,17 @@ def api_summary():
     """).fetchone()
 
     # Attack events (filtered)
-    events = db.execute(f"""
+    events = (
+        db.execute(f"""
         WITH t AS (
             SELECT datetime_utc, LAG(datetime_utc) OVER (ORDER BY datetime_utc) as prev
             FROM messages WHERE message_type='alert' AND is_drill=0 {df}
         )
         SELECT SUM(CASE WHEN prev IS NULL OR (julianday(datetime_utc)-julianday(prev))*24*60>2 THEN 1 ELSE 0 END)
         FROM t
-    """).fetchone()[0] or 0
+    """).fetchone()[0]
+        or 0
+    )
 
     # Latest alert
     latest = db.execute("""
@@ -191,7 +206,9 @@ def api_summary():
             "type": latest["alert_type"],
             "zones": latest["zones"],
             "cities": latest["cities"],
-        } if latest else None,
+        }
+        if latest
+        else None,
     }
 
     # If city/zone filter, add scoped data
@@ -199,7 +216,8 @@ def api_summary():
         # Match both raw and canonical names, always apply date filter
         city_match = "(c.city_name=? OR c.canonical_name=?)"
         city_params = (city_filter, city_filter)
-        city_data = db.execute(f"""
+        city_data = db.execute(
+            f"""
             SELECT COUNT(*) as alerts,
                    MIN(m.datetime_israel) as first_alert,
                    MAX(m.datetime_israel) as last_alert,
@@ -208,30 +226,47 @@ def api_summary():
             JOIN messages m ON ad.msg_id=m.msg_id
             JOIN cities c ON ad.city_id=c.city_id
             WHERE m.message_type='alert' AND m.is_drill=0 AND {city_match} {df_m}
-        """, city_params).fetchone()
-        zone_for_city = db.execute(f"""
+        """,
+            city_params,
+        ).fetchone()
+        zone_for_city = db.execute(
+            f"""
             SELECT DISTINCT z.zone_name FROM alert_details ad
             JOIN messages m ON ad.msg_id=m.msg_id
             JOIN cities c ON ad.city_id=c.city_id
             LEFT JOIN zones z ON ad.zone_id=z.zone_id
             WHERE m.message_type='alert' AND {city_match} {df_m} AND z.zone_name IS NOT NULL LIMIT 3
-        """, city_params).fetchall()
+        """,
+            city_params,
+        ).fetchall()
         # Hourly distribution for this city
-        hourly = [dict(r) for r in db.execute(f"""
+        hourly = [
+            dict(r)
+            for r in db.execute(
+                f"""
             SELECT CAST(strftime('%H', m.datetime_israel) AS INTEGER) as hour, COUNT(*) as count
             FROM alert_details ad JOIN messages m ON ad.msg_id=m.msg_id
             JOIN cities c ON ad.city_id=c.city_id
             WHERE m.message_type='alert' AND m.is_drill=0 AND {city_match} {df_m}
             GROUP BY hour ORDER BY hour
-        """, city_params).fetchall()]
+        """,
+                city_params,
+            ).fetchall()
+        ]
         # Threat type breakdown for this city
-        city_types = [dict(r) for r in db.execute(f"""
+        city_types = [
+            dict(r)
+            for r in db.execute(
+                f"""
             SELECT m.alert_type, COUNT(*) as count
             FROM alert_details ad JOIN messages m ON ad.msg_id=m.msg_id
             JOIN cities c ON ad.city_id=c.city_id
             WHERE m.message_type='alert' AND m.is_drill=0 AND m.alert_type IS NOT NULL AND {city_match} {df_m}
             GROUP BY m.alert_type ORDER BY count DESC
-        """, city_params).fetchall()]
+        """,
+                city_params,
+            ).fetchall()
+        ]
         alert_days = city_data["alert_days"] or 1
         result["city"] = {
             "name": city_filter,
@@ -247,7 +282,8 @@ def api_summary():
         }
 
     if zone_filter:
-        zone_data = db.execute("""
+        zone_data = db.execute(
+            """
             SELECT COUNT(*) as alerts,
                    COUNT(DISTINCT c.city_id) as cities_affected,
                    MIN(m.datetime_israel) as first_alert,
@@ -257,7 +293,9 @@ def api_summary():
             JOIN zones z ON ad.zone_id=z.zone_id
             LEFT JOIN cities c ON ad.city_id=c.city_id
             WHERE m.message_type='alert' AND m.is_drill=0 AND z.zone_name=?
-        """, (zone_filter,)).fetchone()
+        """,
+            (zone_filter,),
+        ).fetchone()
         result["zone"] = {
             "name": zone_filter,
             "alerts": zone_data["alerts"],
@@ -269,32 +307,41 @@ def api_summary():
     date_filter = f"AND m.datetime_israel >= '{date_from}'" if date_from else ""
 
     # Top 10 cities (using canonical names)
-    result["top_cities"] = [dict(r) for r in db.execute(f"""
+    result["top_cities"] = [
+        dict(r)
+        for r in db.execute(f"""
         SELECT COALESCE(c.canonical_name, c.city_name) as city_name, COUNT(*) as alerts
         FROM alert_details ad
         JOIN messages m ON ad.msg_id=m.msg_id
         JOIN cities c ON ad.city_id=c.city_id
         WHERE m.message_type='alert' AND m.is_drill=0 {date_filter}
         GROUP BY COALESCE(c.canonical_name, c.city_name) ORDER BY alerts DESC LIMIT 10
-    """).fetchall()]
+    """).fetchall()
+    ]
 
     # Threat type breakdown
     date_filter_no_alias = f"AND datetime_israel >= '{date_from}'" if date_from else ""
-    result["by_type"] = [dict(r) for r in db.execute(f"""
+    result["by_type"] = [
+        dict(r)
+        for r in db.execute(f"""
         SELECT alert_type, COUNT(*) as count
         FROM messages WHERE message_type='alert' AND is_drill=0 AND alert_type IS NOT NULL {date_filter_no_alias}
         GROUP BY alert_type ORDER BY count DESC
-    """).fetchall()]
+    """).fetchall()
+    ]
 
     # Top 5 zones
-    result["top_zones"] = [dict(r) for r in db.execute(f"""
+    result["top_zones"] = [
+        dict(r)
+        for r in db.execute(f"""
         SELECT z.zone_name, COUNT(DISTINCT ad.msg_id) as alerts
         FROM alert_details ad
         JOIN messages m ON ad.msg_id=m.msg_id
         JOIN zones z ON ad.zone_id=z.zone_id
         WHERE m.message_type='alert' AND m.is_drill=0 {date_filter}
         GROUP BY z.zone_name ORDER BY alerts DESC LIMIT 5
-    """).fetchall()]
+    """).fetchall()
+    ]
 
     # Busiest day
     busiest = db.execute(f"""
@@ -305,7 +352,9 @@ def api_summary():
     result["busiest_day"] = {"date": busiest["date"], "count": busiest["count"]} if busiest else None
 
     # Last 5 alerts (brief)
-    result["recent_alerts"] = [dict(r) for r in db.execute(f"""
+    result["recent_alerts"] = [
+        dict(r)
+        for r in db.execute(f"""
         SELECT m.datetime_israel, m.alert_type,
                GROUP_CONCAT(DISTINCT z.zone_name) as zones,
                COUNT(DISTINCT c.city_id) as city_count
@@ -315,7 +364,8 @@ def api_summary():
         LEFT JOIN cities c ON ad.city_id=c.city_id
         WHERE m.message_type='alert' AND m.is_drill=0 {date_filter}
         GROUP BY m.msg_id ORDER BY m.msg_id DESC LIMIT 5
-    """).fetchall()]
+    """).fetchall()
+    ]
 
     return jsonify(result)
 
@@ -329,22 +379,29 @@ def api_filter_options():
         return jsonify({"cities": [], "zones": [], "alert_types": []})
     # Only include cleanly-parsed cities, using canonical_name to deduplicate dash variants.
     # e.g., "אבו-גוש" and "אבו גוש" both map to canonical "אבו גוש" — show only canonical.
-    clean_with_shelter = set(r[0] for r in db.execute("""
+    clean_with_shelter = set(
+        r[0]
+        for r in db.execute("""
         SELECT DISTINCT COALESCE(c.canonical_name, c.city_name) FROM cities c
         JOIN alert_details ad ON c.city_id=ad.city_id
         WHERE ad.shelter_time IS NOT NULL
-    """).fetchall())
-    cities = sorted(name for name in clean_with_shelter if name.count(' ') <= 3)
-    zones = [r[0] for r in db.execute(
-        "SELECT DISTINCT zone_name FROM zones ORDER BY zone_name").fetchall()]
-    alert_types = [r[0] for r in db.execute(
-        "SELECT DISTINCT alert_type FROM messages WHERE alert_type IS NOT NULL ORDER BY alert_type").fetchall()]
+    """).fetchall()
+    )
+    cities = sorted(name for name in clean_with_shelter if name.count(" ") <= 3)
+    zones = [r[0] for r in db.execute("SELECT DISTINCT zone_name FROM zones ORDER BY zone_name").fetchall()]
+    alert_types = [
+        r[0]
+        for r in db.execute(
+            "SELECT DISTINCT alert_type FROM messages WHERE alert_type IS NOT NULL ORDER BY alert_type"
+        ).fetchall()
+    ]
     return jsonify({"cities": cities, "zones": zones, "alert_types": alert_types})
 
 
 @app.route("/api/prefilters")
 def api_prefilters():
     from config import PREFILTERS
+
     result = []
     for pf in PREFILTERS:
         r = dict(pf)
@@ -369,43 +426,63 @@ def api_filtered_counts():
     # City-level alerts: when city/zone filter active, only count matching detail rows
     if has_detail_filter:
         detail_join = "JOIN cities c ON ad.city_id=c.city_id LEFT JOIN zones z ON ad.zone_id=z.zone_id"
-        city_alerts = db.execute(f"""
+        city_alerts = db.execute(
+            f"""
             SELECT COUNT(*) FROM alert_details ad
             JOIN messages m ON ad.msg_id=m.msg_id {detail_join}
             WHERE m.message_type='alert' AND m.is_drill=0 {filt} {dfilt}
-        """, params + dparams).fetchone()[0]
-        zone_alerts = db.execute(f"""
+        """,
+            params + dparams,
+        ).fetchone()[0]
+        zone_alerts = db.execute(
+            f"""
             SELECT COUNT(*) FROM (
                 SELECT DISTINCT ad.msg_id, ad.zone_id FROM alert_details ad
                 JOIN messages m ON ad.msg_id=m.msg_id {detail_join}
                 WHERE m.message_type='alert' AND m.is_drill=0 {filt} {dfilt}
             )
-        """, params + dparams).fetchone()[0]
+        """,
+            params + dparams,
+        ).fetchone()[0]
     else:
-        city_alerts = db.execute(f"""
+        city_alerts = db.execute(
+            f"""
             SELECT COUNT(*) FROM alert_details ad
             JOIN messages m ON ad.msg_id=m.msg_id
             WHERE m.message_type='alert' AND m.is_drill=0 {filt}
-        """, params).fetchone()[0]
-        zone_alerts = db.execute(f"""
+        """,
+            params,
+        ).fetchone()[0]
+        zone_alerts = db.execute(
+            f"""
             SELECT COUNT(*) FROM (
                 SELECT DISTINCT ad.msg_id, ad.zone_id FROM alert_details ad
                 JOIN messages m ON ad.msg_id=m.msg_id
                 WHERE m.message_type='alert' AND m.is_drill=0 {filt}
             )
-        """, params).fetchone()[0]
+        """,
+            params,
+        ).fetchone()[0]
 
-    msg_alerts = db.execute(f"""
+    msg_alerts = db.execute(
+        f"""
         SELECT COUNT(*) FROM messages m
         WHERE m.message_type='alert' AND m.is_drill=0 {filt}
-    """, params).fetchone()[0]
-    date_info = db.execute(f"""
+    """,
+        params,
+    ).fetchone()[0]
+    date_info = db.execute(
+        f"""
         SELECT MIN(m.datetime_israel), MAX(m.datetime_israel) FROM messages m
         WHERE m.message_type='alert' AND m.is_drill=0 {filt}
-    """, params).fetchone()
+    """,
+        params,
+    ).fetchone()
 
     # Attack events: group messages within 2-min gaps as one event
-    attack_events = db.execute(f"""
+    attack_events = (
+        db.execute(
+            f"""
         WITH msg_times AS (
             SELECT m.msg_id, m.datetime_utc,
                 LAG(m.datetime_utc) OVER (ORDER BY m.datetime_utc) as prev_time
@@ -417,20 +494,27 @@ def api_filtered_counts():
             FROM msg_times
         )
         SELECT SUM(is_new_event) FROM gaps
-    """, params).fetchone()[0] or 0
-    return jsonify({
-        "attack_events": attack_events,
-        "city_alerts": city_alerts,
-        "zone_alerts": zone_alerts,
-        "msg_alerts": msg_alerts,
-        "first": date_info[0],
-        "last": date_info[1],
-    })
+    """,
+            params,
+        ).fetchone()[0]
+        or 0
+    )
+    return jsonify(
+        {
+            "attack_events": attack_events,
+            "city_alerts": city_alerts,
+            "zone_alerts": zone_alerts,
+            "msg_alerts": msg_alerts,
+            "first": date_info[0],
+            "last": date_info[1],
+        }
+    )
 
 
 # ============================================================
 # API: STATS
 # ============================================================
+
 
 @app.route("/api/stats")
 def api_stats():
@@ -457,10 +541,18 @@ def api_stats():
     s["total_details"] = counts["total_details"]
     s["drills"] = counts["drills"]
     s["date_range"] = {"min": counts["date_min"], "max": counts["date_max"]}
-    s["message_types"] = [dict(r) for r in db.execute(
-        "SELECT message_type, COUNT(*) as count FROM messages GROUP BY message_type ORDER BY count DESC").fetchall()]
-    s["alert_types"] = [dict(r) for r in db.execute(
-        "SELECT COALESCE(alert_type,'other') as alert_type, COUNT(*) as count FROM messages WHERE message_type='alert' AND is_drill=0 GROUP BY alert_type ORDER BY count DESC").fetchall()]
+    s["message_types"] = [
+        dict(r)
+        for r in db.execute(
+            "SELECT message_type, COUNT(*) as count FROM messages GROUP BY message_type ORDER BY count DESC"
+        ).fetchall()
+    ]
+    s["alert_types"] = [
+        dict(r)
+        for r in db.execute(
+            "SELECT COALESCE(alert_type,'other') as alert_type, COUNT(*) as count FROM messages WHERE message_type='alert' AND is_drill=0 GROUP BY alert_type ORDER BY count DESC"
+        ).fetchall()
+    ]
     s["version"] = get_current_version()
     meta = load_metadata()
     s["last_run"] = meta.get("runs", [{}])[-1] if meta.get("runs") else None
@@ -468,10 +560,17 @@ def api_stats():
     s["total_fetched"] = meta.get("total_messages", 0)
     for row in db.execute("SELECT key, value FROM db_info"):
         s[f"db_{row['key']}"] = row["value"]
-    s["yearly"] = [dict(r) for r in db.execute(
-        "SELECT strftime('%Y',datetime_israel) as year, COUNT(*) as count FROM messages GROUP BY year ORDER BY year").fetchall()]
-    s["busiest_day"] = dict(db.execute(
-        "SELECT date(datetime_israel) as date, COUNT(*) as count FROM messages WHERE message_type='alert' AND is_drill=0 GROUP BY date ORDER BY count DESC LIMIT 1").fetchone())
+    s["yearly"] = [
+        dict(r)
+        for r in db.execute(
+            "SELECT strftime('%Y',datetime_israel) as year, COUNT(*) as count FROM messages GROUP BY year ORDER BY year"
+        ).fetchall()
+    ]
+    s["busiest_day"] = dict(
+        db.execute(
+            "SELECT date(datetime_israel) as date, COUNT(*) as count FROM messages WHERE message_type='alert' AND is_drill=0 GROUP BY date ORDER BY count DESC LIMIT 1"
+        ).fetchone()
+    )
     # Latest alert with zones and cities
     latest = db.execute("""
         SELECT m.msg_id, m.datetime_utc, m.datetime_israel, m.alert_type, m.raw_text,
@@ -495,8 +594,18 @@ def api_stats():
         }
     else:
         s["latest_alert"] = None
-    last_msg = db.execute("SELECT datetime_utc, datetime_israel, message_type FROM messages ORDER BY msg_id DESC LIMIT 1").fetchone()
-    s["latest_message"] = {"datetime_utc": last_msg["datetime_utc"], "datetime_israel": last_msg["datetime_israel"], "type": last_msg["message_type"]} if last_msg else None
+    last_msg = db.execute(
+        "SELECT datetime_utc, datetime_israel, message_type FROM messages ORDER BY msg_id DESC LIMIT 1"
+    ).fetchone()
+    s["latest_message"] = (
+        {
+            "datetime_utc": last_msg["datetime_utc"],
+            "datetime_israel": last_msg["datetime_israel"],
+            "type": last_msg["message_type"],
+        }
+        if last_msg
+        else None
+    )
     return jsonify(s)
 
 
@@ -504,30 +613,39 @@ def api_stats():
 # API: FILTERED VISUALIZATIONS
 # ============================================================
 
+
 @app.route("/api/viz/hourly")
 def api_viz_hourly():
     filt, params = build_filter_clause()
-    rows = query_db(f"""
+    rows = query_db(
+        f"""
         SELECT CAST(strftime('%H', m.datetime_israel) AS INTEGER) as hour_israel,
                COUNT(*) as total,
                SUM(CASE WHEN m.alert_type='rockets' THEN 1 ELSE 0 END) as rockets,
                SUM(CASE WHEN m.alert_type='aircraft' THEN 1 ELSE 0 END) as aircraft
         FROM messages m WHERE m.message_type='alert' AND m.is_drill=0 {filt}
         GROUP BY hour_israel ORDER BY hour_israel
-    """, params)
+    """,
+        params,
+    )
     return jsonify(rows)
 
 
 @app.route("/api/viz/daily")
 def api_viz_daily():
     filt, params = build_filter_clause()
-    return jsonify(query_db(f"""
+    return jsonify(
+        query_db(
+            f"""
         SELECT date(m.datetime_israel) as date, COUNT(*) as total,
                SUM(CASE WHEN m.alert_type='rockets' THEN 1 ELSE 0 END) as rockets,
                SUM(CASE WHEN m.alert_type='aircraft' THEN 1 ELSE 0 END) as aircraft
         FROM messages m WHERE m.message_type='alert' AND m.is_drill=0 {filt}
         GROUP BY date ORDER BY date
-    """, params))
+    """,
+            params,
+        )
+    )
 
 
 @app.route("/api/viz/top_cities")
@@ -536,7 +654,9 @@ def api_viz_top_cities():
     sort_order = "ASC" if request.args.get("sort") == "asc" else "DESC"
     filt, params = build_filter_clause()
     params.append(limit)
-    return jsonify(query_db(f"""
+    return jsonify(
+        query_db(
+            f"""
         SELECT {CITY_DISPLAY} as city_name, COUNT(*) as alert_count,
                SUM(CASE WHEN m.alert_type='rockets' THEN 1 ELSE 0 END) as rocket_count,
                SUM(CASE WHEN m.alert_type='aircraft' THEN 1 ELSE 0 END) as aircraft_count
@@ -545,13 +665,18 @@ def api_viz_top_cities():
         JOIN cities c ON ad.city_id = c.city_id
         WHERE m.message_type='alert' AND m.is_drill=0 {filt}
         GROUP BY {CITY_DISPLAY} ORDER BY alert_count {sort_order} LIMIT ?
-    """, params))
+    """,
+            params,
+        )
+    )
 
 
 @app.route("/api/viz/zones")
 def api_viz_zones():
     filt, params = build_filter_clause()
-    return jsonify(query_db(f"""
+    return jsonify(
+        query_db(
+            f"""
         SELECT z.zone_name, COUNT(*) as alert_count,
                SUM(CASE WHEN m.alert_type='rockets' THEN 1 ELSE 0 END) as rockets,
                SUM(CASE WHEN m.alert_type='aircraft' THEN 1 ELSE 0 END) as aircraft
@@ -560,49 +685,69 @@ def api_viz_zones():
         JOIN zones z ON ad.zone_id = z.zone_id
         WHERE m.message_type='alert' AND m.is_drill=0 {filt}
         GROUP BY z.zone_name ORDER BY alert_count DESC
-    """, params))
+    """,
+            params,
+        )
+    )
 
 
 @app.route("/api/viz/monthly")
 def api_viz_monthly():
     filt, params = build_filter_clause()
-    return jsonify(query_db(f"""
+    return jsonify(
+        query_db(
+            f"""
         SELECT strftime('%Y-%m', m.datetime_israel) as month, COUNT(*) as total,
                SUM(CASE WHEN m.alert_type='rockets' THEN 1 ELSE 0 END) as rockets,
                SUM(CASE WHEN m.alert_type='aircraft' THEN 1 ELSE 0 END) as aircraft
         FROM messages m WHERE m.message_type='alert' AND m.is_drill=0 {filt}
         GROUP BY month ORDER BY month
-    """, params))
+    """,
+            params,
+        )
+    )
 
 
 @app.route("/api/viz/shelter_times")
 def api_viz_shelter_times():
     filt, params = build_filter_clause()
-    return jsonify(query_db(f"""
+    return jsonify(
+        query_db(
+            f"""
         SELECT ad.shelter_time, COUNT(*) as count
         FROM alert_details ad JOIN messages m ON ad.msg_id = m.msg_id
         WHERE m.message_type='alert' AND ad.shelter_time IS NOT NULL {filt}
         GROUP BY ad.shelter_time ORDER BY count DESC LIMIT 10
-    """, params))
+    """,
+            params,
+        )
+    )
 
 
 @app.route("/api/viz/dow")
 def api_viz_dow():
     """Day of week distribution."""
     filt, params = build_filter_clause()
-    return jsonify(query_db(f"""
+    return jsonify(
+        query_db(
+            f"""
         SELECT CAST(strftime('%w', m.datetime_israel) AS INTEGER) as dow,
                COUNT(*) as total
         FROM messages m WHERE m.message_type='alert' AND m.is_drill=0 {filt}
         GROUP BY dow ORDER BY dow
-    """, params))
+    """,
+            params,
+        )
+    )
 
 
 @app.route("/api/viz/escalation")
 def api_viz_escalation():
     """Alerts per hour within the busiest days — escalation pattern."""
     filt, params = build_filter_clause()
-    return jsonify(query_db(f"""
+    return jsonify(
+        query_db(
+            f"""
         SELECT date(m.datetime_israel) as date,
                CAST(strftime('%H', m.datetime_israel) AS INTEGER) as hour,
                COUNT(*) as count
@@ -614,14 +759,19 @@ def api_viz_escalation():
             GROUP BY date(datetime_israel) ORDER BY COUNT(*) DESC LIMIT 10
           )
         GROUP BY date, hour ORDER BY date, hour
-    """, params))
+    """,
+            params,
+        )
+    )
 
 
 @app.route("/api/viz/city_timeline")
 def api_viz_city_timeline():
     """Top 10 cities monthly timeline."""
     filt, params = build_filter_clause()
-    return jsonify(query_db(f"""
+    return jsonify(
+        query_db(
+            f"""
         SELECT {CITY_DISPLAY} as city_name, strftime('%Y-%m', m.datetime_israel) as month, COUNT(*) as count
         FROM alert_details ad
         JOIN messages m ON ad.msg_id = m.msg_id
@@ -635,37 +785,49 @@ def api_viz_city_timeline():
             GROUP BY COALESCE(c2.canonical_name, c2.city_name) ORDER BY COUNT(*) DESC LIMIT 8
           )
         GROUP BY {CITY_DISPLAY}, month ORDER BY month
-    """, params))
+    """,
+            params,
+        )
+    )
 
 
 @app.route("/api/viz/alert_vs_ended")
 def api_viz_alert_vs_ended():
     """Alert messages vs event_ended messages over time."""
     filt, params = build_filter_clause()
-    return jsonify(query_db(f"""
+    return jsonify(
+        query_db(
+            f"""
         SELECT date(m.datetime_israel) as date,
                SUM(CASE WHEN m.message_type='alert' THEN 1 ELSE 0 END) as alerts,
                SUM(CASE WHEN m.message_type='event_ended' THEN 1 ELSE 0 END) as ended,
                SUM(CASE WHEN m.message_type='heads_up' THEN 1 ELSE 0 END) as heads_up
         FROM messages m WHERE m.is_drill=0 {filt}
         GROUP BY date ORDER BY date
-    """, params))
+    """,
+            params,
+        )
+    )
 
 
 # ============================================================
 # API: CREATIVE ANALYSES
 # ============================================================
 
+
 @app.route("/api/viz/safest_hours")
 def api_viz_safest_hours():
     """Safest hours to shower — lowest alert probability by hour (Israel time)."""
     filt, params = build_filter_clause()
-    rows = query_db(f"""
+    rows = query_db(
+        f"""
         SELECT CAST(strftime('%H', m.datetime_israel) AS INTEGER) as hour_israel,
                COUNT(*) as alerts
         FROM messages m WHERE m.message_type='alert' AND m.is_drill=0 {filt}
         GROUP BY hour_israel ORDER BY hour_israel
-    """, params)
+    """,
+        params,
+    )
     total = sum(r["alerts"] for r in rows) or 1
     for r in rows:
         r["pct"] = round(100 * r["alerts"] / total, 1)
@@ -679,13 +841,16 @@ def api_viz_safest_10min():
     Counts alerts per 10-min bucket across all days, ranks by fewest alerts."""
     filt, params = build_filter_clause()
     # Get minute-level distribution using Israel time
-    rows = query_db(f"""
+    rows = query_db(
+        f"""
         SELECT CAST(strftime('%H', m.datetime_israel) AS INTEGER) as h,
                CAST(strftime('%M', m.datetime_israel) AS INTEGER) / 10 as m10,
                COUNT(*) as alerts
         FROM messages m WHERE m.message_type='alert' AND m.is_drill=0 {filt}
         GROUP BY h, m10 ORDER BY h, m10
-    """, params)
+    """,
+        params,
+    )
     # Build 144 10-min buckets (24h × 6)
     buckets = {}
     for h in range(24):
@@ -696,7 +861,7 @@ def api_viz_safest_10min():
     # Rank by fewest alerts
     result = []
     for (h, m), alerts in sorted(buckets.items(), key=lambda x: x[1]):
-        label = f"{h:02d}:{m*10:02d}-{h:02d}:{m*10+9:02d}"
+        label = f"{h:02d}:{m * 10:02d}-{h:02d}:{m * 10 + 9:02d}"
         result.append({"slot": label, "alerts": alerts, "h": h, "m10": m})
     return jsonify(result)
 
@@ -705,7 +870,9 @@ def api_viz_safest_10min():
 def api_viz_city_safety_rank():
     """City safety ranking — fewest alerts per city, only cities with any alert."""
     filt, params = build_filter_clause()
-    return jsonify(query_db(f"""
+    return jsonify(
+        query_db(
+            f"""
         SELECT {CITY_DISPLAY} as city_name, z.zone_name, COUNT(*) as alerts,
                SUM(CASE WHEN m.alert_type='rockets' THEN 1 ELSE 0 END) as rockets,
                SUM(CASE WHEN m.alert_type='aircraft' THEN 1 ELSE 0 END) as drones,
@@ -717,14 +884,19 @@ def api_viz_city_safety_rank():
         WHERE m.message_type='alert' AND m.is_drill=0 {filt}
         GROUP BY {CITY_DISPLAY}, z.zone_name
         ORDER BY alerts DESC
-    """, params))
+    """,
+            params,
+        )
+    )
 
 
 @app.route("/api/viz/drone_cities")
 def api_viz_drone_cities():
     """Cities with most drone/aircraft alerts."""
     filt, params = build_filter_clause()
-    return jsonify(query_db(f"""
+    return jsonify(
+        query_db(
+            f"""
         SELECT {CITY_DISPLAY} as city_name, z.zone_name, COUNT(*) as drone_alerts
         FROM alert_details ad
         JOIN messages m ON ad.msg_id=m.msg_id
@@ -732,14 +904,19 @@ def api_viz_drone_cities():
         LEFT JOIN zones z ON ad.zone_id=z.zone_id
         WHERE m.message_type='alert' AND m.is_drill=0 AND m.alert_type='aircraft' {filt}
         GROUP BY {CITY_DISPLAY} ORDER BY drone_alerts DESC LIMIT 25
-    """, params))
+    """,
+            params,
+        )
+    )
 
 
 @app.route("/api/viz/city_zone_anomaly")
 def api_viz_city_zone_anomaly():
     """City vs Zone anomaly — cities that are outliers vs their zone average."""
     filt, params = build_filter_clause()
-    return jsonify(query_db(f"""
+    return jsonify(
+        query_db(
+            f"""
         WITH city_counts AS (
             SELECT c.city_name, z.zone_name, COUNT(*) as city_alerts
             FROM alert_details ad
@@ -762,12 +939,16 @@ def api_viz_city_zone_anomaly():
         WHERE za.num_cities >= 3
         ORDER BY ratio DESC
         LIMIT 50
-    """, params))
+    """,
+            params,
+        )
+    )
 
 
 # ============================================================
 # API: NEW ADVANCED ANALYSES
 # ============================================================
+
 
 @app.route("/api/viz/response_time")
 def api_viz_response_time():
@@ -804,7 +985,9 @@ def api_viz_response_time():
 def api_viz_multi_zone():
     """Simultaneous multi-zone attacks — messages that hit the most zones at once."""
     filt, params = build_filter_clause()
-    return jsonify(query_db(f"""
+    return jsonify(
+        query_db(
+            f"""
         SELECT m.msg_id, m.datetime_israel, m.alert_type,
                COUNT(DISTINCT ad.zone_id) as zone_count,
                COUNT(DISTINCT ad.city_id) as city_count,
@@ -817,7 +1000,10 @@ def api_viz_multi_zone():
         HAVING zone_count >= 3
         ORDER BY zone_count DESC, city_count DESC
         LIMIT 50
-    """, params))
+    """,
+            params,
+        )
+    )
 
 
 @app.route("/api/viz/streaks")
@@ -852,7 +1038,9 @@ def api_viz_streaks():
 def api_viz_calendar():
     """Calendar heatmap data: daily alert count with weekday/week info."""
     filt, params = build_filter_clause()
-    return jsonify(query_db(f"""
+    return jsonify(
+        query_db(
+            f"""
         SELECT date(m.datetime_israel) as date,
                CAST(strftime('%w', m.datetime_israel) AS INTEGER) as dow,
                CAST(strftime('%W', m.datetime_israel) AS INTEGER) as week,
@@ -860,12 +1048,16 @@ def api_viz_calendar():
                COUNT(*) as count
         FROM messages m WHERE m.message_type='alert' AND m.is_drill=0 {filt}
         GROUP BY date ORDER BY date
-    """, params))
+    """,
+            params,
+        )
+    )
 
 
 # ============================================================
 # API: HEADS-UP & EVENT CORRELATION
 # ============================================================
+
 
 @app.route("/api/viz/heads_up_correlation")
 def api_viz_heads_up_correlation():
@@ -874,13 +1066,20 @@ def api_viz_heads_up_correlation():
     db = get_shared_db()
     if not db:
         return jsonify({"error": "No DB"}), 404
-    hu_rows = [dict(r) for r in db.execute(
-        "SELECT msg_id, datetime_utc, datetime_israel FROM messages WHERE message_type='heads_up' ORDER BY datetime_utc"
-    ).fetchall()]
-    alert_times = [r[0] for r in db.execute(
-        "SELECT datetime_utc FROM messages WHERE message_type='alert' AND is_drill=0 ORDER BY datetime_utc"
-    ).fetchall()]
+    hu_rows = [
+        dict(r)
+        for r in db.execute(
+            "SELECT msg_id, datetime_utc, datetime_israel FROM messages WHERE message_type='heads_up' ORDER BY datetime_utc"
+        ).fetchall()
+    ]
+    alert_times = [
+        r[0]
+        for r in db.execute(
+            "SELECT datetime_utc FROM messages WHERE message_type='alert' AND is_drill=0 ORDER BY datetime_utc"
+        ).fetchall()
+    ]
     import bisect
+
     rows = []
     for hu in hu_rows:
         hu_time = hu["datetime_utc"]
@@ -890,17 +1089,25 @@ def api_viz_heads_up_correlation():
         if idx < len(alert_times):
             candidate = alert_times[idx]
             # Check within 15 minutes
-            from datetime import datetime as _dt, timedelta
+            from datetime import datetime as _dt
+
             hu_dt = _dt.strptime(hu_time, "%Y-%m-%d %H:%M:%S")
             al_dt = _dt.strptime(candidate, "%Y-%m-%d %H:%M:%S")
             if (al_dt - hu_dt).total_seconds() <= 900:  # 15 min
                 alert_time = candidate
-        minutes = round(((_dt.strptime(alert_time, "%Y-%m-%d %H:%M:%S") - hu_dt).total_seconds() / 60), 1) if alert_time else None
-        rows.append({
-            "msg_id": hu["msg_id"], "datetime_israel": hu["datetime_israel"],
-            "followed_by_alert": 1 if alert_time else 0,
-            "minutes_to_alert": minutes,
-        })
+        minutes = (
+            round(((_dt.strptime(alert_time, "%Y-%m-%d %H:%M:%S") - hu_dt).total_seconds() / 60), 1)
+            if alert_time
+            else None
+        )
+        rows.append(
+            {
+                "msg_id": hu["msg_id"],
+                "datetime_israel": hu["datetime_israel"],
+                "followed_by_alert": 1 if alert_time else 0,
+                "minutes_to_alert": minutes,
+            }
+        )
     total = len(rows)
     hits = sum(1 for r in rows if r["followed_by_alert"])
     misses = total - hits
@@ -931,16 +1138,26 @@ def api_viz_heads_up_correlation():
             monthly[mo]["total"] += 1
             if r["followed_by_alert"]:
                 monthly[mo]["hits"] += 1
-    monthly_list = [{"month": k, "total": v["total"], "hits": v["hits"],
-                     "hit_rate": round(100 * v["hits"] / v["total"], 1) if v["total"] else 0}
-                    for k, v in sorted(monthly.items())]
-    return jsonify({
-        "total": total, "hits": hits, "misses": misses,
-        "hit_rate_pct": round(100 * hits / max(total, 1), 1),
-        "avg_minutes_to_alert": avg_min,
-        "buckets": buckets,
-        "monthly": monthly_list,
-    })
+    monthly_list = [
+        {
+            "month": k,
+            "total": v["total"],
+            "hits": v["hits"],
+            "hit_rate": round(100 * v["hits"] / v["total"], 1) if v["total"] else 0,
+        }
+        for k, v in sorted(monthly.items())
+    ]
+    return jsonify(
+        {
+            "total": total,
+            "hits": hits,
+            "misses": misses,
+            "hit_rate_pct": round(100 * hits / max(total, 1), 1),
+            "avg_minutes_to_alert": avg_min,
+            "buckets": buckets,
+            "monthly": monthly_list,
+        }
+    )
 
 
 @app.route("/api/viz/event_ended_analysis")
@@ -976,12 +1193,16 @@ def api_viz_event_ended_analysis():
     type_summary = []
     for t, v in sorted(by_type.items(), key=lambda x: -x[1]["total"]):
         mins = v["minutes"]
-        type_summary.append({
-            "alert_type": t, "total": v["total"], "cleared": v["cleared"],
-            "clear_pct": round(100 * v["cleared"] / v["total"], 1),
-            "avg_min": round(sum(mins) / len(mins), 1) if mins else None,
-            "median_min": round(sorted(mins)[len(mins) // 2], 1) if mins else None,
-        })
+        type_summary.append(
+            {
+                "alert_type": t,
+                "total": v["total"],
+                "cleared": v["cleared"],
+                "clear_pct": round(100 * v["cleared"] / v["total"], 1),
+                "avg_min": round(sum(mins) / len(mins), 1) if mins else None,
+                "median_min": round(sorted(mins)[len(mins) // 2], 1) if mins else None,
+            }
+        )
     # Monthly trend of clearance rate
     monthly = {}
     for r in rows:
@@ -991,20 +1212,29 @@ def api_viz_event_ended_analysis():
         monthly[mo]["total"] += 1
         if r["has_clearance"]:
             monthly[mo]["cleared"] += 1
-    monthly_list = [{"month": k, "total": v["total"], "cleared": v["cleared"],
-                     "clear_pct": round(100 * v["cleared"] / v["total"], 1)}
-                    for k, v in sorted(monthly.items())]
-    return jsonify({
-        "by_type": type_summary,
-        "monthly": monthly_list,
-        "total_alerts": len(rows),
-        "total_ended": sum(1 for r in rows if r["has_clearance"]),
-    })
+    monthly_list = [
+        {
+            "month": k,
+            "total": v["total"],
+            "cleared": v["cleared"],
+            "clear_pct": round(100 * v["cleared"] / v["total"], 1),
+        }
+        for k, v in sorted(monthly.items())
+    ]
+    return jsonify(
+        {
+            "by_type": type_summary,
+            "monthly": monthly_list,
+            "total_alerts": len(rows),
+            "total_ended": sum(1 for r in rows if r["has_clearance"]),
+        }
+    )
 
 
 # ============================================================
 # API: ERD + DATA MODEL
 # ============================================================
+
 
 @app.route("/api/viz/erd")
 def api_viz_erd():
@@ -1040,18 +1270,27 @@ def api_data_profile():
     p = {}
     p["messages_nulls"] = {}
     for col in ["datetime_utc", "alert_date", "alert_time_local", "message_type", "alert_type"]:
-        p["messages_nulls"][col] = db.execute(f"SELECT COUNT(*) c FROM messages WHERE {col} IS NULL OR {col}=''").fetchone()["c"]
+        p["messages_nulls"][col] = db.execute(
+            f"SELECT COUNT(*) c FROM messages WHERE {col} IS NULL OR {col}=''"
+        ).fetchone()["c"]
     p["distinct"] = {
         "message_types": db.execute("SELECT COUNT(DISTINCT message_type) c FROM messages").fetchone()["c"],
-        "alert_types": db.execute("SELECT COUNT(DISTINCT alert_type) c FROM messages WHERE alert_type IS NOT NULL").fetchone()["c"],
+        "alert_types": db.execute(
+            "SELECT COUNT(DISTINCT alert_type) c FROM messages WHERE alert_type IS NOT NULL"
+        ).fetchone()["c"],
         "zones": db.execute("SELECT COUNT(*) c FROM zones").fetchone()["c"],
         "cities": db.execute("SELECT COUNT(*) c FROM cities").fetchone()["c"],
         "dates": db.execute("SELECT COUNT(DISTINCT date(datetime_israel)) c FROM messages").fetchone()["c"],
     }
     p["cities_with_alerts"] = db.execute(
-        "SELECT COUNT(DISTINCT city_id) c FROM alert_details ad JOIN messages m ON ad.msg_id=m.msg_id WHERE m.message_type='alert'").fetchone()["c"]
-    p["avg_cities_per_alert"] = round(db.execute(
-        "SELECT AVG(cnt) a FROM (SELECT COUNT(*) cnt FROM alert_details ad JOIN messages m ON ad.msg_id=m.msg_id WHERE m.message_type='alert' GROUP BY ad.msg_id)").fetchone()["a"], 1)
+        "SELECT COUNT(DISTINCT city_id) c FROM alert_details ad JOIN messages m ON ad.msg_id=m.msg_id WHERE m.message_type='alert'"
+    ).fetchone()["c"]
+    p["avg_cities_per_alert"] = round(
+        db.execute(
+            "SELECT AVG(cnt) a FROM (SELECT COUNT(*) cnt FROM alert_details ad JOIN messages m ON ad.msg_id=m.msg_id WHERE m.message_type='alert' GROUP BY ad.msg_id)"
+        ).fetchone()["a"],
+        1,
+    )
     db_path = get_db_path()
     p["db_size_mb"] = round(os.path.getsize(db_path) / 1024 / 1024, 1) if db_path else 0
     return jsonify(p)
@@ -1060,6 +1299,7 @@ def api_data_profile():
 # ============================================================
 # API: SQL QUERY
 # ============================================================
+
 
 @app.route("/api/query", methods=["POST"])
 def api_query():
@@ -1086,6 +1326,7 @@ def api_query():
 # API: PIPELINE
 # ============================================================
 
+
 @app.route("/api/pipeline/<action>", methods=["POST"])
 def api_pipeline(action):
     global pipeline_running
@@ -1098,8 +1339,9 @@ def api_pipeline(action):
         if action != "status":
             pipeline_running = True
     if action == "status":
-        r = subprocess.run([sys.executable, os.path.join(BASE_DIR, "pikud.py"), "status"],
-                           capture_output=True, text=True, timeout=10)
+        r = subprocess.run(
+            [sys.executable, os.path.join(BASE_DIR, "pikud.py"), "status"], capture_output=True, text=True, timeout=10
+        )
         return jsonify({"output": r.stdout, "error": r.stderr, "returncode": r.returncode})
 
     def run():
@@ -1109,8 +1351,12 @@ def api_pipeline(action):
         try:
             proc = subprocess.Popen(
                 [sys.executable, os.path.join(BASE_DIR, "pikud.py"), action],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                env=os.environ.copy(), cwd=BASE_DIR)
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                env=os.environ.copy(),
+                cwd=BASE_DIR,
+            )
             with open(log_file, "w") as lf:
                 for line in proc.stdout:
                     line = line.rstrip()
@@ -1118,8 +1364,10 @@ def api_pipeline(action):
                     lf.flush()
                     log_pipeline("info", line)
             proc.wait()
-            log_pipeline("success" if proc.returncode == 0 else "error",
-                         f"{'✓' if proc.returncode==0 else '✗'} {action} {'completed' if proc.returncode==0 else 'failed'}")
+            log_pipeline(
+                "success" if proc.returncode == 0 else "error",
+                f"{'✓' if proc.returncode == 0 else '✗'} {action} {'completed' if proc.returncode == 0 else 'failed'}",
+            )
             if proc.returncode == 0:
                 reset_shared_db()
         except Exception as e:
@@ -1127,6 +1375,7 @@ def api_pipeline(action):
         finally:
             with pipeline_lock:
                 pipeline_running = False
+
     threading.Thread(target=run, daemon=True).start()
     return jsonify({"status": "started", "action": action})
 
@@ -1135,20 +1384,25 @@ def api_pipeline(action):
 def api_pipeline_stream():
     q = queue.Queue()
     pipeline_subscribers.append(q)
+
     def gen():
         try:
             while True:
                 try:
                     yield f"data: {q.get(timeout=30)}\n\n"
                 except queue.Empty:
-                    yield f"data: {json.dumps({'type':'ping'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'ping'})}\n\n"
         except GeneratorExit:
             pass
         finally:
             if q in pipeline_subscribers:
                 pipeline_subscribers.remove(q)
-    return Response(stream_with_context(gen()), mimetype="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    return Response(
+        stream_with_context(gen()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.route("/api/pipeline/running")
@@ -1179,12 +1433,18 @@ def api_alerts_drilldown():
     offset = request.args.get("offset", 0, type=int)
     has_detail_filter = bool(request.args.get("city") or request.args.get("zone"))
     # Get messages newest first
-    msgs = [dict(r) for r in db.execute(f"""
+    msgs = [
+        dict(r)
+        for r in db.execute(
+            f"""
         SELECT m.msg_id, m.datetime_israel, m.alert_type, m.message_type, m.is_drill, m.raw_text
         FROM messages m
         WHERE m.message_type='alert' AND m.is_drill=0 {filt}
         ORDER BY m.msg_id DESC LIMIT ? OFFSET ?
-    """, params + [limit, offset]).fetchall()]
+    """,
+            params + [limit, offset],
+        ).fetchall()
+    ]
     # Get details for these messages
     if msgs:
         msg_ids = [m["msg_id"] for m in msgs]
@@ -1212,9 +1472,12 @@ def api_alerts_drilldown():
             details[mid].append({"zone": r["zone_name"], "city": r["city_name"], "shelter": r["shelter_time"]})
         for m in msgs:
             m["details"] = details.get(m["msg_id"], [])
-    total = db.execute(f"""
+    total = db.execute(
+        f"""
         SELECT COUNT(*) FROM messages m WHERE m.message_type='alert' AND m.is_drill=0 {filt}
-    """, params).fetchone()[0]
+    """,
+        params,
+    ).fetchone()[0]
     return jsonify({"alerts": msgs, "total": total, "offset": offset, "limit": limit})
 
 
@@ -1476,45 +1739,69 @@ def api_data_journey_examples():
 
     # Pick diverse examples
     example_queries = [
-        ("single_city_rocket", "Single City — Rocket Alert",
-         "A simple alert targeting one city in one zone. The most common message type.",
-         """SELECT msg_id FROM messages WHERE message_type='alert' AND alert_type='rockets'
+        (
+            "single_city_rocket",
+            "Single City — Rocket Alert",
+            "A simple alert targeting one city in one zone. The most common message type.",
+            """SELECT msg_id FROM messages WHERE message_type='alert' AND alert_type='rockets'
             AND msg_id IN (SELECT msg_id FROM alert_details GROUP BY msg_id HAVING COUNT(*)=1)
-            ORDER BY RANDOM() LIMIT 1"""),
-        ("multi_city_single_zone", "Multi-City, Single Zone — Rocket Barrage",
-         "One alert covering multiple cities within the same defense zone.",
-         """SELECT msg_id FROM messages WHERE message_type='alert' AND alert_type='rockets'
+            ORDER BY RANDOM() LIMIT 1""",
+        ),
+        (
+            "multi_city_single_zone",
+            "Multi-City, Single Zone — Rocket Barrage",
+            "One alert covering multiple cities within the same defense zone.",
+            """SELECT msg_id FROM messages WHERE message_type='alert' AND alert_type='rockets'
             AND msg_id IN (SELECT msg_id FROM alert_details GROUP BY msg_id
             HAVING COUNT(*) BETWEEN 3 AND 8 AND COUNT(DISTINCT zone_id)=1)
-            ORDER BY RANDOM() LIMIT 1"""),
-        ("multi_zone_attack", "Multi-Zone Attack — Mass Barrage",
-         "A major attack spanning multiple defense zones and many cities simultaneously.",
-         """SELECT msg_id FROM messages WHERE message_type='alert' AND alert_type='rockets'
+            ORDER BY RANDOM() LIMIT 1""",
+        ),
+        (
+            "multi_zone_attack",
+            "Multi-Zone Attack — Mass Barrage",
+            "A major attack spanning multiple defense zones and many cities simultaneously.",
+            """SELECT msg_id FROM messages WHERE message_type='alert' AND alert_type='rockets'
             AND msg_id IN (SELECT msg_id FROM alert_details GROUP BY msg_id
             HAVING COUNT(DISTINCT zone_id)>=3 AND COUNT(*)>=8)
-            ORDER BY RANDOM() LIMIT 1"""),
-        ("aircraft_alert", "Aircraft / UAV Alert",
-         "Hostile drone or aircraft intrusion alert — different threat type than rockets.",
-         """SELECT msg_id FROM messages WHERE message_type='alert' AND alert_type='aircraft'
+            ORDER BY RANDOM() LIMIT 1""",
+        ),
+        (
+            "aircraft_alert",
+            "Aircraft / UAV Alert",
+            "Hostile drone or aircraft intrusion alert — different threat type than rockets.",
+            """SELECT msg_id FROM messages WHERE message_type='alert' AND alert_type='aircraft'
             AND msg_id IN (SELECT msg_id FROM alert_details GROUP BY msg_id
             HAVING COUNT(*) BETWEEN 2 AND 8)
-            ORDER BY RANDOM() LIMIT 1"""),
-        ("event_ended", "Event Ended — All Clear",
-         "Not an alert — a system message announcing the threat has passed. Parsed as message_type='event_ended', no alert_details rows.",
-         """SELECT msg_id FROM messages WHERE message_type='event_ended'
-            ORDER BY RANDOM() LIMIT 1"""),
-        ("drill_message", "Drill — Test Alert",
-         "A real siren test. Detected by 'תרגיל' keyword. Flagged is_drill=1 and excluded from all statistics.",
-         """SELECT msg_id FROM messages WHERE is_drill=1 AND message_type='alert'
-            ORDER BY RANDOM() LIMIT 1"""),
-        ("heads_up_message", "Heads-Up — Early Warning (התרעה מקדימה)",
-         "An advance warning: 'alerts expected in your area in the coming minutes'. Classified as message_type='heads_up'. 99.2% are followed by a real alert within 15 min (avg 4.1 min). No alert_details rows — just a warning.",
-         """SELECT msg_id FROM messages WHERE message_type='heads_up'
-            ORDER BY RANDOM() LIMIT 1"""),
-        ("can_leave_shelter", "Can Leave Shelter (ניתן לצאת מהמרחב המוגן)",
-         "Notification that residents can leave shelter. Classified as message_type='can_leave_shelter'. Different from event_ended — this is specifically about shelter status.",
-         """SELECT msg_id FROM messages WHERE message_type='can_leave_shelter'
-            ORDER BY RANDOM() LIMIT 1"""),
+            ORDER BY RANDOM() LIMIT 1""",
+        ),
+        (
+            "event_ended",
+            "Event Ended — All Clear",
+            "Not an alert — a system message announcing the threat has passed. Parsed as message_type='event_ended', no alert_details rows.",
+            """SELECT msg_id FROM messages WHERE message_type='event_ended'
+            ORDER BY RANDOM() LIMIT 1""",
+        ),
+        (
+            "drill_message",
+            "Drill — Test Alert",
+            "A real siren test. Detected by 'תרגיל' keyword. Flagged is_drill=1 and excluded from all statistics.",
+            """SELECT msg_id FROM messages WHERE is_drill=1 AND message_type='alert'
+            ORDER BY RANDOM() LIMIT 1""",
+        ),
+        (
+            "heads_up_message",
+            "Heads-Up — Early Warning (התרעה מקדימה)",
+            "An advance warning: 'alerts expected in your area in the coming minutes'. Classified as message_type='heads_up'. 99.2% are followed by a real alert within 15 min (avg 4.1 min). No alert_details rows — just a warning.",
+            """SELECT msg_id FROM messages WHERE message_type='heads_up'
+            ORDER BY RANDOM() LIMIT 1""",
+        ),
+        (
+            "can_leave_shelter",
+            "Can Leave Shelter (ניתן לצאת מהמרחב המוגן)",
+            "Notification that residents can leave shelter. Classified as message_type='can_leave_shelter'. Different from event_ended — this is specifically about shelter status.",
+            """SELECT msg_id FROM messages WHERE message_type='can_leave_shelter'
+            ORDER BY RANDOM() LIMIT 1""",
+        ),
     ]
 
     ver = get_current_version()
@@ -1532,20 +1819,31 @@ def api_data_journey_examples():
         msg_id = row[0]
 
         # Get full message
-        msg = dict(db.execute("""
+        msg = dict(
+            db.execute(
+                """
             SELECT msg_id, datetime_utc, datetime_israel, alert_date, alert_time_local,
                    message_type, alert_type, is_drill, raw_text, views
             FROM messages WHERE msg_id=?
-        """, (msg_id,)).fetchone())
+        """,
+                (msg_id,),
+            ).fetchone()
+        )
 
         # Get alert_details
-        details = [dict(r) for r in db.execute("""
+        details = [
+            dict(r)
+            for r in db.execute(
+                """
             SELECT z.zone_name, c.city_name, ad.shelter_time
             FROM alert_details ad
             LEFT JOIN zones z ON ad.zone_id=z.zone_id
             LEFT JOIN cities c ON ad.city_id=c.city_id
             WHERE ad.msg_id=?
-        """, (msg_id,)).fetchall()]
+        """,
+                (msg_id,),
+            ).fetchall()
+        ]
 
         # Find CSV source
         csv_source = None
@@ -1576,55 +1874,61 @@ def api_data_journey_examples():
         elif msg["message_type"] == "alert":
             views_included = ["v_alerts_full"]
 
-        examples.append({
-            "type": ex_type,
-            "title": title,
-            "description": description,
-            "msg_id": msg_id,
-            "telegram": {
-                "raw_text": msg["raw_text"],
-                "datetime_utc": msg["datetime_utc"],
-                "views": msg["views"],
-            },
-            "csv": {
-                "source_file": csv_source,
-                "row": csv_row,
-            },
-            "db": {
-                "messages_row": {
-                    "msg_id": msg["msg_id"],
+        examples.append(
+            {
+                "type": ex_type,
+                "title": title,
+                "description": description,
+                "msg_id": msg_id,
+                "telegram": {
+                    "raw_text": msg["raw_text"],
                     "datetime_utc": msg["datetime_utc"],
-                    "datetime_israel": msg["datetime_israel"],
-                    "message_type": msg["message_type"],
-                    "alert_type": msg["alert_type"],
-                    "is_drill": msg["is_drill"],
-                    "alert_date": msg["alert_date"],
-                    "alert_time_local": msg["alert_time_local"],
+                    "views": msg["views"],
                 },
-                "alert_details": details,
-                "detail_count": len(details),
-                "zones": zone_names,
-                "cities": city_names,
-                "zone_count": len(zone_names),
-                "city_count": len(city_names),
-            },
-            "counting": {
-                "alert_messages": 1 if msg["message_type"] == "alert" and not msg["is_drill"] else 0,
-                "city_alerts": len(city_names) if msg["message_type"] == "alert" and not msg["is_drill"] else 0,
-                "zone_alerts": len(zone_names) if msg["message_type"] == "alert" and not msg["is_drill"] else 0,
-            },
-            "calculated_fields": [
-                {"field": "datetime_israel", "value": msg["datetime_israel"],
-                 "formula": f"datetime_utc ({msg['datetime_utc']}) + UTC offset"},
-                {"field": "message_type", "value": msg["message_type"],
-                 "formula": "classify_message(raw_text)"},
-                {"field": "alert_type", "value": msg["alert_type"],
-                 "formula": "classify_message(raw_text) → threat type"},
-                {"field": "is_drill", "value": msg["is_drill"],
-                 "formula": "'תרגיל' in raw_text → 1, else 0"},
-            ],
-            "views_included": views_included,
-        })
+                "csv": {
+                    "source_file": csv_source,
+                    "row": csv_row,
+                },
+                "db": {
+                    "messages_row": {
+                        "msg_id": msg["msg_id"],
+                        "datetime_utc": msg["datetime_utc"],
+                        "datetime_israel": msg["datetime_israel"],
+                        "message_type": msg["message_type"],
+                        "alert_type": msg["alert_type"],
+                        "is_drill": msg["is_drill"],
+                        "alert_date": msg["alert_date"],
+                        "alert_time_local": msg["alert_time_local"],
+                    },
+                    "alert_details": details,
+                    "detail_count": len(details),
+                    "zones": zone_names,
+                    "cities": city_names,
+                    "zone_count": len(zone_names),
+                    "city_count": len(city_names),
+                },
+                "counting": {
+                    "alert_messages": 1 if msg["message_type"] == "alert" and not msg["is_drill"] else 0,
+                    "city_alerts": len(city_names) if msg["message_type"] == "alert" and not msg["is_drill"] else 0,
+                    "zone_alerts": len(zone_names) if msg["message_type"] == "alert" and not msg["is_drill"] else 0,
+                },
+                "calculated_fields": [
+                    {
+                        "field": "datetime_israel",
+                        "value": msg["datetime_israel"],
+                        "formula": f"datetime_utc ({msg['datetime_utc']}) + UTC offset",
+                    },
+                    {"field": "message_type", "value": msg["message_type"], "formula": "classify_message(raw_text)"},
+                    {
+                        "field": "alert_type",
+                        "value": msg["alert_type"],
+                        "formula": "classify_message(raw_text) → threat type",
+                    },
+                    {"field": "is_drill", "value": msg["is_drill"], "formula": "'תרגיל' in raw_text → 1, else 0"},
+                ],
+                "views_included": views_included,
+            }
+        )
 
     return jsonify(examples)
 
@@ -1660,25 +1964,34 @@ def api_pipeline_sample_check():
     # Pick random alert message from DB
     total = db.execute("SELECT COUNT(*) c FROM messages WHERE message_type='alert'").fetchone()["c"]
     offset = random.randint(0, max(0, total - 1))
-    msg = db.execute("""
+    msg = db.execute(
+        """
         SELECT m.msg_id, m.datetime_utc, m.datetime_israel, m.message_type, m.alert_type,
                m.is_drill, m.raw_text, m.alert_date, m.alert_time_local
         FROM messages m WHERE m.message_type='alert'
         LIMIT 1 OFFSET ?
-    """, (offset,)).fetchone()
+    """,
+        (offset,),
+    ).fetchone()
     if not msg:
         return jsonify({"error": "No messages found"})
 
     msg_id = msg["msg_id"]
 
     # Get alert_details for this message
-    details = [dict(r) for r in db.execute("""
+    details = [
+        dict(r)
+        for r in db.execute(
+            """
         SELECT ad.id, z.zone_name, c.city_name, ad.shelter_time
         FROM alert_details ad
         LEFT JOIN zones z ON ad.zone_id=z.zone_id
         LEFT JOIN cities c ON ad.city_id=c.city_id
         WHERE ad.msg_id=?
-    """, (msg_id,)).fetchall()]
+    """,
+            (msg_id,),
+        ).fetchall()
+    ]
 
     # Find which CSV file contains this msg_id
     ver = get_current_version()
@@ -1702,29 +2015,32 @@ def api_pipeline_sample_check():
                                     break
                     break
 
-    return jsonify({
-        "msg_id": msg_id,
-        "db_record": {
-            "msg_id": msg["msg_id"],
-            "datetime_utc": msg["datetime_utc"],
-            "datetime_israel": msg["datetime_israel"],
-            "message_type": msg["message_type"],
-            "alert_type": msg["alert_type"],
-            "is_drill": msg["is_drill"],
-            "alert_date": msg["alert_date"],
-            "alert_time_local": msg["alert_time_local"],
-            "raw_text": msg["raw_text"],
-        },
-        "alert_details": details,
-        "csv_source": csv_source,
-        "csv_row": csv_row,
-        "detail_count": len(details),
-    })
+    return jsonify(
+        {
+            "msg_id": msg_id,
+            "db_record": {
+                "msg_id": msg["msg_id"],
+                "datetime_utc": msg["datetime_utc"],
+                "datetime_israel": msg["datetime_israel"],
+                "message_type": msg["message_type"],
+                "alert_type": msg["alert_type"],
+                "is_drill": msg["is_drill"],
+                "alert_date": msg["alert_date"],
+                "alert_time_local": msg["alert_time_local"],
+                "raw_text": msg["raw_text"],
+            },
+            "alert_details": details,
+            "csv_source": csv_source,
+            "csv_row": csv_row,
+            "detail_count": len(details),
+        }
+    )
 
 
 # ============================================================
 # API: PIPELINE DATA ENGINEER
 # ============================================================
+
 
 @app.route("/api/pipeline/versions")
 def api_pipeline_versions():
@@ -1736,8 +2052,7 @@ def api_pipeline_versions():
         return jsonify({"versions": [], "current": None})
 
     current_ver = get_current_version()
-    ver_dirs = sorted(d for d in os.listdir(DATA_DIR)
-                      if d.startswith("v") and os.path.isdir(os.path.join(DATA_DIR, d)))
+    ver_dirs = sorted(d for d in os.listdir(DATA_DIR) if d.startswith("v") and os.path.isdir(os.path.join(DATA_DIR, d)))
 
     for vdir in ver_dirs:
         ver_num = vdir.replace("v", "")
@@ -1754,12 +2069,14 @@ def api_pipeline_versions():
             fpath = os.path.join(ver_path, fname)
             if os.path.isfile(fpath):
                 st = os.stat(fpath)
-                files.append({
-                    "name": fname,
-                    "size_bytes": st.st_size,
-                    "size_human": _human_size(st.st_size),
-                    "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
-                })
+                files.append(
+                    {
+                        "name": fname,
+                        "size_bytes": st.st_size,
+                        "size_human": _human_size(st.st_size),
+                        "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+                    }
+                )
 
         # Build run details with DB verification
         db_path = os.path.join(DB_DIR, f"pikud_v{ver_num}.db")
@@ -1798,35 +2115,39 @@ def api_pipeline_versions():
                     pass
 
             file_info = next((f for f in files if f["name"] == run["filename"]), None)
-            runs.append({
-                "index": i,
-                "filename": run["filename"],
-                "fetched_at": run.get("fetched_at"),
-                "message_count": run.get("message_count", 0),
-                "start_msg_id": run.get("start_msg_id"),
-                "end_msg_id": run.get("end_msg_id"),
-                "start_date": run.get("start_date"),
-                "end_date": run.get("end_date"),
-                "file_size": file_info["size_human"] if file_info else "—",
-                "file_exists": csv_exists,
-                "is_initial": i == 0,
-                "in_db": csv_msg_ids_in_db,
-                "missing_from_db": csv_msg_ids_missing,
-                "db_verified": csv_exists and db_exists and csv_msg_ids_missing == 0 and csv_msg_ids_in_db > 0,
-            })
+            runs.append(
+                {
+                    "index": i,
+                    "filename": run["filename"],
+                    "fetched_at": run.get("fetched_at"),
+                    "message_count": run.get("message_count", 0),
+                    "start_msg_id": run.get("start_msg_id"),
+                    "end_msg_id": run.get("end_msg_id"),
+                    "start_date": run.get("start_date"),
+                    "end_date": run.get("end_date"),
+                    "file_size": file_info["size_human"] if file_info else "—",
+                    "file_exists": csv_exists,
+                    "is_initial": i == 0,
+                    "in_db": csv_msg_ids_in_db,
+                    "missing_from_db": csv_msg_ids_missing,
+                    "db_verified": csv_exists and db_exists and csv_msg_ids_missing == 0 and csv_msg_ids_in_db > 0,
+                }
+            )
 
-        versions.append({
-            "version": ver_num,
-            "is_current": ver_num == current_ver,
-            "path": ver_path,
-            "files": files,
-            "runs": runs,
-            "total_messages": metadata.get("total_messages", 0),
-            "last_msg_id": metadata.get("last_msg_id", 0),
-            "db_exists": db_exists,
-            "db_msg_count": db_msg_count,
-            "db_size": _human_size(os.path.getsize(db_path)) if db_exists else "—",
-        })
+        versions.append(
+            {
+                "version": ver_num,
+                "is_current": ver_num == current_ver,
+                "path": ver_path,
+                "files": files,
+                "runs": runs,
+                "total_messages": metadata.get("total_messages", 0),
+                "last_msg_id": metadata.get("last_msg_id", 0),
+                "db_exists": db_exists,
+                "db_msg_count": db_msg_count,
+                "db_size": _human_size(os.path.getsize(db_path)) if db_exists else "—",
+            }
+        )
 
     return jsonify({"versions": versions, "current": current_ver})
 
@@ -1902,9 +2223,11 @@ def api_pipeline_validate_check(check):
             s, e, fn = ranges[i]
             result["details"].append(f"{fn}: {s:,} → {e:,}")
         for i in range(1, len(ranges)):
-            if ranges[i][0] <= ranges[i-1][1]:
+            if ranges[i][0] <= ranges[i - 1][1]:
                 result["ok"] = False
-                result["issues"].append(f"Overlap: {ranges[i-1][2]} ends at {ranges[i-1][1]}, {ranges[i][2]} starts at {ranges[i][0]}")
+                result["issues"].append(
+                    f"Overlap: {ranges[i - 1][2]} ends at {ranges[i - 1][1]}, {ranges[i][2]} starts at {ranges[i][0]}"
+                )
         if result["ok"]:
             result["details"].append("✓ No overlaps")
 
@@ -1993,9 +2316,9 @@ def api_pipeline_validate_check(check):
 
 
 def _human_size(nbytes):
-    for unit in ['B', 'KB', 'MB', 'GB']:
+    for unit in ["B", "KB", "MB", "GB"]:
         if abs(nbytes) < 1024:
-            return f"{nbytes:.1f} {unit}" if unit != 'B' else f"{nbytes} B"
+            return f"{nbytes:.1f} {unit}" if unit != "B" else f"{nbytes} B"
         nbytes /= 1024
     return f"{nbytes:.1f} TB"
 
@@ -2004,10 +2327,12 @@ def _human_size(nbytes):
 # API: EXPORT
 # ============================================================
 
+
 @app.route("/api/export/<mode>")
 def api_export(mode):
     """Export database as CSV ZIP. mode: 'full' (with calculated) or 'raw' (without)."""
     from dashboard_app.export import export_to_zip
+
     if mode not in ("full", "raw"):
         return jsonify({"error": "Mode must be 'full' or 'raw'"}), 400
     db = get_shared_db()
@@ -2017,13 +2342,15 @@ def api_export(mode):
     zip_bytes = export_to_zip(db, include_calculated=include_calc)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"pikud_export_{mode}_{ts}.zip"
-    return Response(zip_bytes, mimetype="application/zip",
-                    headers={"Content-Disposition": f"attachment; filename={filename}"})
+    return Response(
+        zip_bytes, mimetype="application/zip", headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 
 # ============================================================
 # API: LOGS
 # ============================================================
+
 
 @app.route("/api/logs")
 def api_logs():
@@ -2031,8 +2358,13 @@ def api_logs():
     for f in sorted(os.listdir(LOGS_DIR), reverse=True):
         if f.endswith(".log"):
             st = os.stat(os.path.join(LOGS_DIR, f))
-            logs.append({"name": f, "size": st.st_size,
-                         "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")})
+            logs.append(
+                {
+                    "name": f,
+                    "size": st.st_size,
+                    "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+                }
+            )
     return jsonify(logs)
 
 
@@ -2053,6 +2385,7 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     debug = os.environ.get("FLASK_ENV") != "production"
     import subprocess
+
     try:
         ip = subprocess.check_output(["ipconfig", "getifaddr", "en0"], text=True).strip()
     except Exception:

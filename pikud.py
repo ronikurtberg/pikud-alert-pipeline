@@ -30,13 +30,13 @@ import argparse
 import csv
 
 from dotenv import load_dotenv
+
 load_dotenv()
 import json
 import os
 import re
 import shutil
 import sqlite3
-import subprocess
 import sys
 from datetime import datetime, timezone
 
@@ -58,6 +58,7 @@ API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
 # VERSION MANAGEMENT
 # ============================================================
 
+
 def get_current_version():
     """Get the current active data version number."""
     link = os.path.join(DATA_DIR, "current")
@@ -65,7 +66,9 @@ def get_current_version():
         target = os.readlink(link)
         return target.replace("v", "")
     # Find highest existing version
-    versions = [d for d in os.listdir(DATA_DIR) if d.startswith("v") and d[1:].isdigit()] if os.path.exists(DATA_DIR) else []
+    versions = (
+        [d for d in os.listdir(DATA_DIR) if d.startswith("v") and d[1:].isdigit()] if os.path.exists(DATA_DIR) else []
+    )
     if versions:
         return str(max(int(v[1:]) for v in versions))
     return None
@@ -130,7 +133,7 @@ def init_version():
     legacy_db = os.path.join(DATA_DIR, "pikud.db")
     if os.path.exists(legacy_db):
         shutil.move(legacy_db, os.path.join(DB_DIR, "pikud_v1.db"))
-        print(f"  Migrated pikud.db → db/pikud_v1.db")
+        print("  Migrated pikud.db → db/pikud_v1.db")
 
     _update_symlink(DATA_DIR, "current", "v1")
     _update_symlink(DB_DIR, "current", "pikud_v1.db")
@@ -140,6 +143,7 @@ def init_version():
 # ============================================================
 # METADATA
 # ============================================================
+
 
 def load_metadata(ver_dir):
     meta_path = os.path.join(ver_dir, "metadata.json")
@@ -158,6 +162,7 @@ def save_metadata(ver_dir, metadata):
 # ============================================================
 # FETCH (TELEGRAM API)
 # ============================================================
+
 
 async def fetch_messages(min_id=0):
     """Fetch messages from Telegram API. Returns list of dicts."""
@@ -182,12 +187,14 @@ async def fetch_messages(min_id=0):
             continue
         count += 1
         text = re.sub(r"\s+", " ", msg.text.strip())
-        rows.append({
-            "msg_id": msg.id,
-            "datetime_utc": msg.date.strftime("%Y-%m-%d %H:%M:%S") if msg.date else "",
-            "raw_text": text,
-            "views": msg.views or "",
-        })
+        rows.append(
+            {
+                "msg_id": msg.id,
+                "datetime_utc": msg.date.strftime("%Y-%m-%d %H:%M:%S") if msg.date else "",
+                "raw_text": text,
+                "views": msg.views or "",
+            }
+        )
         if count % 500 == 0:
             print(f"    {count} messages...")
 
@@ -217,39 +224,40 @@ def save_delta_csv(ver_dir, rows):
 # PARSING (used by build_db)
 # ============================================================
 
-def classify_message(text: str) -> tuple[str, str | None, bool]:
-    is_drill = 'תרגיל' in text
-    if 'האירוע הסתיים' in text:
-        msg_type = 'event_ended'
-    elif 'בדקות הקרובות' in text:
-        msg_type = 'heads_up'
-    elif 'ניתן לצאת' in text:
-        msg_type = 'can_leave_shelter'
-    elif 'מבזק' in text:
-        msg_type = 'flash'
-    elif any(k in text for k in ['ירי רקטות', 'חדירת כלי טיס', 'רעידת אדמה', 'חומרים מסוכנים', 'חדירת מחבלים']):
-        msg_type = 'alert'
-    elif 'עדכון' in text:
-        msg_type = 'update'
-    elif any(k in text for k in ['שיגור', 'יירוט']):
-        msg_type = 'intercept_report'
-    elif any(k in text for k in ['הנחיות', 'מגבלות', 'הגבלות']):
-        msg_type = 'instructions'
-    else:
-        msg_type = 'other'
 
-    if 'ירי רקטות' in text:
-        alert_type = 'rockets'
-    elif 'חדירת כלי טיס עוין' in text:
-        alert_type = 'aircraft'
-    elif 'רעידת אדמה' in text:
-        alert_type = 'earthquake'
-    elif 'חומרים מסוכנים' in text:
-        alert_type = 'hazmat'
-    elif 'חדירת מחבלים' in text or 'מחבלים' in text:
-        alert_type = 'infiltration'
-    elif 'צונאמי' in text:
-        alert_type = 'tsunami'
+def classify_message(text: str) -> tuple[str, str | None, bool]:
+    is_drill = "תרגיל" in text
+    if "האירוע הסתיים" in text:
+        msg_type = "event_ended"
+    elif "בדקות הקרובות" in text:
+        msg_type = "heads_up"
+    elif "ניתן לצאת" in text:
+        msg_type = "can_leave_shelter"
+    elif "מבזק" in text:
+        msg_type = "flash"
+    elif any(k in text for k in ["ירי רקטות", "חדירת כלי טיס", "רעידת אדמה", "חומרים מסוכנים", "חדירת מחבלים"]):
+        msg_type = "alert"
+    elif "עדכון" in text:
+        msg_type = "update"
+    elif any(k in text for k in ["שיגור", "יירוט"]):
+        msg_type = "intercept_report"
+    elif any(k in text for k in ["הנחיות", "מגבלות", "הגבלות"]):
+        msg_type = "instructions"
+    else:
+        msg_type = "other"
+
+    if "ירי רקטות" in text:
+        alert_type = "rockets"
+    elif "חדירת כלי טיס עוין" in text:
+        alert_type = "aircraft"
+    elif "רעידת אדמה" in text:
+        alert_type = "earthquake"
+    elif "חומרים מסוכנים" in text:
+        alert_type = "hazmat"
+    elif "חדירת מחבלים" in text or "מחבלים" in text:
+        alert_type = "infiltration"
+    elif "צונאמי" in text:
+        alert_type = "tsunami"
     else:
         alert_type = None
 
@@ -257,7 +265,7 @@ def classify_message(text: str) -> tuple[str, str | None, bool]:
 
 
 def extract_date_time(text: str) -> tuple[str | None, str | None]:
-    m = re.search(r'[\[\(](\d{1,2}/\d{1,2}/\d{4})[\]\)]\s*(?:בשעה\s*)?(\d{1,2}:\d{2})', text)
+    m = re.search(r"[\[\(](\d{1,2}/\d{1,2}/\d{4})[\]\)]\s*(?:בשעה\s*)?(\d{1,2}:\d{2})", text)
     if m:
         return m.group(1), m.group(2)
     return None, None
@@ -265,20 +273,20 @@ def extract_date_time(text: str) -> tuple[str | None, str | None]:
 
 def extract_zones_and_cities(text: str) -> list[tuple[str, list[tuple[str, str | None]]]]:
     results = []
-    zone_splits = re.split(r'\*{2}(אזור\s+[^*]+?)\*{2}', text)
+    zone_splits = re.split(r"\*{2}(אזור\s+[^*]+?)\*{2}", text)
     i = 1
     while i < len(zone_splits) - 1:
         zone_name = zone_splits[i].strip()
         cities_text = zone_splits[i + 1] if i + 1 < len(zone_splits) else ""
-        cities_text = re.split(r'היכנסו|חשד\s+לכניסת|להנחיות|לשאלות|כדי\s+שנהיה|בעקבות\s+כניסת', cities_text)[0]
+        cities_text = re.split(r"היכנסו|חשד\s+לכניסת|להנחיות|לשאלות|כדי\s+שנהיה|בעקבות\s+כניסת", cities_text)[0]
         cities = parse_cities(cities_text)
         if cities:
             results.append((zone_name, cities))
         i += 2
 
-    if not results and '**' not in text and 'אזור' in text:
-        known_zones = r'קו העימות|עוטף עזה|גליל עליון|לכיש|מערב לכיש|השפלה|דן|מערב הנגב|המפרץ|שרון|ירקון|מרכז הנגב|שומרון|גולן דרום|מרכז הגליל|שפלת יהודה|העמקים|יהודה|גולן צפון|דרום הנגב|ירושלים|מנשה|בקעת בית שאן|ואדי ערה|גליל תחתון|בקעה|דרום השפלה|ים המלח|הכרמל|ערבה|אילת|חפר|בית שמש'
-        for m in re.finditer(rf'(אזור\s+(?:{known_zones}))\s+(.+?)(?=אזור\s|$)', text):
+    if not results and "**" not in text and "אזור" in text:
+        known_zones = r"קו העימות|עוטף עזה|גליל עליון|לכיש|מערב לכיש|השפלה|דן|מערב הנגב|המפרץ|שרון|ירקון|מרכז הנגב|שומרון|גולן דרום|מרכז הגליל|שפלת יהודה|העמקים|יהודה|גולן צפון|דרום הנגב|ירושלים|מנשה|בקעת בית שאן|ואדי ערה|גליל תחתון|בקעה|דרום השפלה|ים המלח|הכרמל|ערבה|אילת|חפר|בית שמש"
+        for m in re.finditer(rf"(אזור\s+(?:{known_zones}))\s+(.+?)(?=אזור\s|$)", text):
             zone_name = m.group(1).strip()
             cities = parse_cities(m.group(2).strip())
             if cities:
@@ -289,81 +297,138 @@ def extract_zones_and_cities(text: str) -> list[tuple[str, list[tuple[str, str |
 
 # Known multi-word city name prefixes (these should NOT be split on space)
 _MULTI_WORD_PREFIXES = [
-    'קריית', 'כפר', 'בית', 'תל', 'באר', 'ראש', 'גבעת', 'מעלה', 'מעלות',
-    'שדה', 'עין', 'אבן', 'גן', 'נווה', 'נאות', 'רמת', 'אור', 'מצפה', 'נוף',
-    'אזור תעשייה', 'פארק תעשיות', 'מרכז אזורי', 'קיבוץ', 'מושב',
-    'בני', 'בן', 'הר', 'מגדל', 'נחל', 'צומת', 'מעגן', 'יד', 'גבעות', 'גשר',
-    'עמק', 'מעיין', 'פנימיית', 'מכללת', 'שער',
+    "קריית",
+    "כפר",
+    "בית",
+    "תל",
+    "באר",
+    "ראש",
+    "גבעת",
+    "מעלה",
+    "מעלות",
+    "שדה",
+    "עין",
+    "אבן",
+    "גן",
+    "נווה",
+    "נאות",
+    "רמת",
+    "אור",
+    "מצפה",
+    "נוף",
+    "אזור תעשייה",
+    "פארק תעשיות",
+    "מרכז אזורי",
+    "קיבוץ",
+    "מושב",
+    "בני",
+    "בן",
+    "הר",
+    "מגדל",
+    "נחל",
+    "צומת",
+    "מעגן",
+    "יד",
+    "גבעות",
+    "גשר",
+    "עמק",
+    "מעיין",
+    "פנימיית",
+    "מכללת",
+    "שער",
 ]
 
 # Known compound city names (4+ words) starting with multi-word prefixes.
 # The prefix+1 rule in _split_space_separated_cities truncates these.
 # Sorted longest-first for greedy matching.
-_KNOWN_COMPOUND_CITIES = sorted([
-    # אזור תעשייה + multi-word suffix
-    'אזור תעשייה אכזיב מילואות',
-    'אזור תעשייה אלון התבור',
-    'אזור תעשייה אפק ולב הארץ',
-    'אזור תעשייה באר טוביה',
-    'אזור תעשייה בני יהודה',
-    'אזור תעשייה הדרומי אשקלון',
-    'אזור תעשייה הר טוב',
-    'אזור תעשייה חבל מודיעין',
-    'אזור תעשייה חבל מודיעין שוהם',
-    'אזור תעשייה חצור הגלילית',
-    'אזור תעשייה יקנעם עילית',
-    'אזור תעשייה כפר יונה',
-    'אזור תעשייה מבוא כרמל',
-    'אזור תעשייה מבואות הגלבוע',
-    'אזור תעשייה מילואות צפון',
-    'אזור תעשייה מישור אדומים',
-    'אזור תעשייה ניר עציון',
-    'אזור תעשייה עד הלום',
-    'אזור תעשייה עידן הנגב',
-    'אזור תעשייה עמק חפר',
-    'אזור תעשייה צפוני אשקלון',
-    'אזור תעשייה קדמת גליל',
-    'אזור תעשייה קריית ביאליק',
-    'אזור תעשייה קריית גת',
-    'אזור תעשייה רמת דלתון',
-    'אזור תעשייה שער בנימין',
-    'אזור תעשייה שער נעמן',
-    # מרכז אזורי + multi-word suffix
-    'מרכז אזורי דרום השרון',
-    'מרכז אזורי מבואות חרמון',
-    'מרכז אזורי מרום גליל',
-    'מרכז אזורי רמת כורזים',
-    # פארק תעשיות + multi-word suffix
-    'פארק תעשיות מגדל עוז',
-], key=lambda x: len(x.split()), reverse=True)
+_KNOWN_COMPOUND_CITIES = sorted(
+    [
+        # אזור תעשייה + multi-word suffix
+        "אזור תעשייה אכזיב מילואות",
+        "אזור תעשייה אלון התבור",
+        "אזור תעשייה אפק ולב הארץ",
+        "אזור תעשייה באר טוביה",
+        "אזור תעשייה בני יהודה",
+        "אזור תעשייה הדרומי אשקלון",
+        "אזור תעשייה הר טוב",
+        "אזור תעשייה חבל מודיעין",
+        "אזור תעשייה חבל מודיעין שוהם",
+        "אזור תעשייה חצור הגלילית",
+        "אזור תעשייה יקנעם עילית",
+        "אזור תעשייה כפר יונה",
+        "אזור תעשייה מבוא כרמל",
+        "אזור תעשייה מבואות הגלבוע",
+        "אזור תעשייה מילואות צפון",
+        "אזור תעשייה מישור אדומים",
+        "אזור תעשייה ניר עציון",
+        "אזור תעשייה עד הלום",
+        "אזור תעשייה עידן הנגב",
+        "אזור תעשייה עמק חפר",
+        "אזור תעשייה צפוני אשקלון",
+        "אזור תעשייה קדמת גליל",
+        "אזור תעשייה קריית ביאליק",
+        "אזור תעשייה קריית גת",
+        "אזור תעשייה רמת דלתון",
+        "אזור תעשייה שער בנימין",
+        "אזור תעשייה שער נעמן",
+        # מרכז אזורי + multi-word suffix
+        "מרכז אזורי דרום השרון",
+        "מרכז אזורי מבואות חרמון",
+        "מרכז אזורי מרום גליל",
+        "מרכז אזורי רמת כורזים",
+        # פארק תעשיות + multi-word suffix
+        "פארק תעשיות מגדל עוז",
+    ],
+    key=lambda x: len(x.split()),
+    reverse=True,
+)
 
 
 def parse_cities(text: str) -> list[tuple[str, str | None]]:
     cities = []
-    text = text.replace('**', '').strip()
-    stop_words = ['היכנסו', 'להנחיות', 'לשאלות', 'כדי', 'בעקבות', 'שהו', 'ניתן',
-                  'באזורים', 'בהמשך', 'למשך', 'השוהים', 'על תושבי', 'עליך',
-                  'למרחב', 'המוגן', 'דקות', 'לפעול', 'בהתאם', 'המלאות', 'התרעה']
+    text = text.replace("**", "").strip()
+    stop_words = [
+        "היכנסו",
+        "להנחיות",
+        "לשאלות",
+        "כדי",
+        "בעקבות",
+        "שהו",
+        "ניתן",
+        "באזורים",
+        "בהמשך",
+        "למשך",
+        "השוהים",
+        "על תושבי",
+        "עליך",
+        "למרחב",
+        "המוגן",
+        "דקות",
+        "לפעול",
+        "בהתאם",
+        "המלאות",
+        "התרעה",
+    ]
 
     # Phase 1: Try splitting by shelter-time parentheses (most reliable)
-    parts = re.split(r'\(([^)]*(?:שניות|דקה|דקות|מיידי)[^)]*)\)', text)
+    parts = re.split(r"\(([^)]*(?:שניות|דקה|דקות|מיידי)[^)]*)\)", text)
     has_shelter = len(parts) > 1
-    has_comma = ',' in text or '،' in text
+    has_comma = "," in text or "،" in text
 
     if has_shelter:
         # Shelter-time delimited: split each text block by comma
         for j in range(0, len(parts)):
             if j % 2 == 0:
-                city_names = re.split(r'[,،]', parts[j])
+                city_names = re.split(r"[,،]", parts[j])
                 shelter_time = parts[j + 1].strip() if j + 1 < len(parts) else None
                 for cn in city_names:
-                    cn = cn.strip().strip('*').strip()
+                    cn = cn.strip().strip("*").strip()
                     if cn and len(cn) > 1 and not any(k in cn for k in stop_words):
                         cities.append((cn, shelter_time))
     elif has_comma:
         # Comma-separated (no shelter times)
-        for cn in re.split(r'[,،]', text):
-            cn = cn.strip().strip('*').strip()
+        for cn in re.split(r"[,،]", text):
+            cn = cn.strip().strip("*").strip()
             if cn and len(cn) > 1 and not any(k in cn for k in stop_words):
                 cities.append((cn, None))
     else:
@@ -379,7 +444,7 @@ def _split_space_separated_cities(text: str, stop_words: list[str]) -> list[tupl
     cities = []
     i = 0
     while i < len(words):
-        word = words[i].strip().strip('*').strip()
+        word = words[i].strip().strip("*").strip()
         if not word or word.isdigit() or any(k in word for k in stop_words):
             i += 1
             continue
@@ -389,12 +454,12 @@ def _split_space_separated_cities(text: str, stop_words: list[str]) -> list[tupl
         for known in _KNOWN_COMPOUND_CITIES:
             known_words = known.split()
             if i + len(known_words) <= len(words):
-                candidate = ' '.join(words[i:i + len(known_words)])
+                candidate = " ".join(words[i : i + len(known_words)])
                 if candidate == known:
                     city_name = known
                     i += len(known_words)
                     # Check for dash-suffix (e.g. "אזור תעשייה הר טוב - צרעה")
-                    if i + 1 < len(words) and words[i] == '-':
+                    if i + 1 < len(words) and words[i] == "-":
                         city_name = f"{city_name} - {words[i + 1]}"
                         i += 2
                     cities.append((city_name, None))
@@ -406,15 +471,15 @@ def _split_space_separated_cities(text: str, stop_words: list[str]) -> list[tupl
             for prefix in _MULTI_WORD_PREFIXES:
                 prefix_words = prefix.split()
                 if i + len(prefix_words) <= len(words):
-                    candidate = ' '.join(words[i:i + len(prefix_words)])
+                    candidate = " ".join(words[i : i + len(prefix_words)])
                     if candidate == prefix or candidate.startswith(prefix):
                         # Multi-word prefix: take prefix + 1 more word (e.g. "קריית שמונה", "בית שאן")
                         end = i + len(prefix_words)
                         if end < len(words) and not any(k in words[end] for k in stop_words):
-                            city_name = ' '.join(words[i:end + 1]).strip().strip('*').strip()
+                            city_name = " ".join(words[i : end + 1]).strip().strip("*").strip()
                             i = end + 1
                             # Check for dash-suffix (e.g. "אזור תעשייה נשר - רמלה")
-                            if i + 1 < len(words) and words[i] == '-':
+                            if i + 1 < len(words) and words[i] == "-":
                                 city_name = f"{city_name} - {words[i + 1]}"
                                 i += 2
                             if city_name and len(city_name) > 1:
@@ -422,7 +487,7 @@ def _split_space_separated_cities(text: str, stop_words: list[str]) -> list[tupl
                             matched_multi = True
                             break
                         else:
-                            city_name = candidate.strip().strip('*').strip()
+                            city_name = candidate.strip().strip("*").strip()
                             if city_name and len(city_name) > 1:
                                 cities.append((city_name, None))
                             i += len(prefix_words)
@@ -433,7 +498,7 @@ def _split_space_separated_cities(text: str, stop_words: list[str]) -> list[tupl
             # Single word city name — skip very short words (likely prepositions)
             if word and len(word) > 2 and not any(k in word for k in stop_words):
                 # Check if next word is a dash-suffix (e.g. "חיפה - מערב")
-                if i + 2 < len(words) and words[i + 1] == '-':
+                if i + 2 < len(words) and words[i + 1] == "-":
                     city_name = f"{word} - {words[i + 2]}"
                     cities.append((city_name, None))
                     i += 3
@@ -569,8 +634,9 @@ def build_database(ver_dir: str, db_path: str, version: str) -> bool:
         "source_metadata": json.dumps(metadata),
     }
     for k, v in build_info.items():
-        conn.execute("INSERT OR REPLACE INTO db_info (key, value) VALUES (?, ?)",
-                      (k, v if isinstance(v, str) else json.dumps(v)))
+        conn.execute(
+            "INSERT OR REPLACE INTO db_info (key, value) VALUES (?, ?)", (k, v if isinstance(v, str) else json.dumps(v))
+        )
 
     zone_cache = {}
     city_cache = {}
@@ -606,7 +672,9 @@ def build_database(ver_dir: str, db_path: str, version: str) -> bool:
                 israel_str = None
                 if utc_str:
                     try:
-                        from datetime import datetime as _dt, timedelta
+                        from datetime import datetime as _dt
+                        from datetime import timedelta
+
                         utc_dt = _dt.strptime(utc_str, "%Y-%m-%d %H:%M:%S")
                         # Israel: UTC+2 (IST) Oct-Mar, UTC+3 (IDT) Mar-Oct. Approximate:
                         month = utc_dt.month
@@ -620,8 +688,18 @@ def build_database(ver_dir: str, db_path: str, version: str) -> bool:
                     """INSERT OR REPLACE INTO messages
                        (msg_id, datetime_utc, datetime_israel, alert_date, alert_time_local, message_type, alert_type, is_drill, raw_text, views)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (msg_id, utc_str, israel_str, alert_date, alert_time, msg_type, alert_type,
-                     1 if is_drill else 0, text, row.get("views", ""))
+                    (
+                        msg_id,
+                        utc_str,
+                        israel_str,
+                        alert_date,
+                        alert_time,
+                        msg_type,
+                        alert_type,
+                        1 if is_drill else 0,
+                        text,
+                        row.get("views", ""),
+                    ),
                 )
                 total_msgs += 1
 
@@ -631,7 +709,8 @@ def build_database(ver_dir: str, db_path: str, version: str) -> bool:
                         city_id = get_city_id(city_name)
                         conn.execute(
                             "INSERT INTO alert_details (msg_id, zone_id, city_id, shelter_time) VALUES (?, ?, ?, ?)",
-                            (msg_id, zone_id, city_id, shelter_time))
+                            (msg_id, zone_id, city_id, shelter_time),
+                        )
                         total_details += 1
 
                 if total_msgs % 5000 == 0:
@@ -644,15 +723,19 @@ def build_database(ver_dir: str, db_path: str, version: str) -> bool:
     all_cities = {r[0]: r[1] for r in conn.execute("SELECT city_id, city_name FROM cities").fetchall()}
     name_to_id = {v: k for k, v in all_cities.items()}
     for cid, cname in all_cities.items():
-        if '-' in cname:
-            space_variant = cname.replace('-', ' ')
+        if "-" in cname:
+            space_variant = cname.replace("-", " ")
             if space_variant in name_to_id and space_variant != cname:
                 # Both exist — pick the one with more alert_details as canonical
                 dash_count = conn.execute("SELECT COUNT(*) FROM alert_details WHERE city_id=?", (cid,)).fetchone()[0]
-                space_count = conn.execute("SELECT COUNT(*) FROM alert_details WHERE city_id=?", (name_to_id[space_variant],)).fetchone()[0]
+                space_count = conn.execute(
+                    "SELECT COUNT(*) FROM alert_details WHERE city_id=?", (name_to_id[space_variant],)
+                ).fetchone()[0]
                 canonical = space_variant if space_count >= dash_count else cname
                 conn.execute("UPDATE cities SET canonical_name=? WHERE city_id=?", (canonical, cid))
-                conn.execute("UPDATE cities SET canonical_name=? WHERE city_id=?", (canonical, name_to_id[space_variant]))
+                conn.execute(
+                    "UPDATE cities SET canonical_name=? WHERE city_id=?", (canonical, name_to_id[space_variant])
+                )
                 canonical_count += 1
     if canonical_count:
         conn.commit()
@@ -670,6 +753,7 @@ def build_database(ver_dir: str, db_path: str, version: str) -> bool:
 # ============================================================
 # VALIDATION
 # ============================================================
+
 
 def validate(ver_dir: str, db_path: str) -> tuple[bool, list[str]]:
     """Run validation checks. Returns (ok: bool, issues: list[str])."""
@@ -713,8 +797,10 @@ def validate(ver_dir: str, db_path: str) -> tuple[bool, list[str]]:
         csv_ranges.append((run["start_msg_id"], run["end_msg_id"], run["filename"]))
     csv_ranges.sort()
     for j in range(1, len(csv_ranges)):
-        if csv_ranges[j][0] <= csv_ranges[j-1][1]:
-            issues.append(f"OVERLAP: {csv_ranges[j-1][2]} ends at {csv_ranges[j-1][1]}, {csv_ranges[j][2]} starts at {csv_ranges[j][0]}")
+        if csv_ranges[j][0] <= csv_ranges[j - 1][1]:
+            issues.append(
+                f"OVERLAP: {csv_ranges[j - 1][2]} ends at {csv_ranges[j - 1][1]}, {csv_ranges[j][2]} starts at {csv_ranges[j][0]}"
+            )
 
     # 5. Validate DB if it exists
     if os.path.exists(db_path):
@@ -745,7 +831,7 @@ def validate(ver_dir: str, db_path: str) -> tuple[bool, list[str]]:
         for issue in issues:
             print(f"    ✗ {issue}")
     else:
-        print(f"  VALIDATION PASSED")
+        print("  VALIDATION PASSED")
         print(f"    CSV files: {len(csv_files)}")
         print(f"    Total messages: {total_csv_rows}")
         print(f"    Unique msg_ids: {len(all_msg_ids)}")
@@ -757,6 +843,7 @@ def validate(ver_dir: str, db_path: str) -> tuple[bool, list[str]]:
 # ============================================================
 # COMMANDS
 # ============================================================
+
 
 def cmd_status():
     """Show current pipeline state."""
@@ -780,7 +867,7 @@ def cmd_status():
 
     if metadata.get("runs"):
         last_run = metadata["runs"][-1]
-        print(f"\nLast run:")
+        print("\nLast run:")
         print(f"  File: {last_run['filename']}")
         print(f"  Fetched at: {last_run['fetched_at']}")
         print(f"  Messages: {last_run['message_count']}")
@@ -788,7 +875,9 @@ def cmd_status():
 
     # All versions
     if os.path.exists(DATA_DIR):
-        versions = sorted(d for d in os.listdir(DATA_DIR) if d.startswith("v") and os.path.isdir(os.path.join(DATA_DIR, d)))
+        versions = sorted(
+            d for d in os.listdir(DATA_DIR) if d.startswith("v") and os.path.isdir(os.path.join(DATA_DIR, d))
+        )
         if len(versions) > 1:
             print(f"\nAll versions: {', '.join(versions)} (current: v{version})")
 
@@ -820,15 +909,17 @@ def cmd_delta():
     total_existing = metadata.get("total_messages", 0)
     delta_size = len(rows)
     if total_existing > 0 and delta_size > total_existing * 0.5:
-        print(f"\n  ⚠️ LARGE DELTA WARNING: {delta_size} new messages is {delta_size/total_existing*100:.0f}% of existing {total_existing}")
-        print(f"  This is unusually large. If unexpected, check Telegram channel for bulk changes.")
-        print(f"  Proceeding anyway (use full_refresh if data structure changed)...")
+        print(
+            f"\n  ⚠️ LARGE DELTA WARNING: {delta_size} new messages is {delta_size / total_existing * 100:.0f}% of existing {total_existing}"
+        )
+        print("  This is unusually large. If unexpected, check Telegram channel for bulk changes.")
+        print("  Proceeding anyway (use full_refresh if data structure changed)...")
     if delta_size > 0:
         # Check for ID regression (new IDs should be > last_msg_id)
         min_new_id = min(r["msg_id"] for r in rows)
         if min_new_id <= last_msg_id:
             print(f"\n  ✗ ID REGRESSION: new min ID {min_new_id} <= last_msg_id {last_msg_id}")
-            print(f"  This indicates overlapping or duplicate data. Aborting.")
+            print("  This indicates overlapping or duplicate data. Aborting.")
             return False
 
     # Save CSV
@@ -854,26 +945,26 @@ def cmd_delta():
     save_metadata(ver_dir, metadata)
 
     # Pre-build validation (CSV integrity before DB insert)
-    print(f"\n[3/4] PRE-BUILD VALIDATION...")
+    print("\n[3/4] PRE-BUILD VALIDATION...")
     pre_ok, pre_issues = validate(ver_dir, db_path if os.path.exists(db_path) else "")
     if not pre_ok:
         # Only fail on CSV-level issues (not DB issues since we're about to rebuild)
         csv_issues = [i for i in pre_issues if "DB " not in i and "DB" not in i.split()[0] if i.split()]
         if csv_issues:
-            print(f"  PRE-BUILD VALIDATION FAILED:")
+            print("  PRE-BUILD VALIDATION FAILED:")
             for issue in csv_issues:
                 print(f"    ✗ {issue}")
             return False
-        print(f"  CSV checks passed (DB will be rebuilt)")
+        print("  CSV checks passed (DB will be rebuilt)")
     else:
-        print(f"  All pre-build checks passed")
+        print("  All pre-build checks passed")
 
     # Rebuild DB
-    print(f"\n[4/4] REBUILDING DATABASE...")
+    print("\n[4/4] REBUILDING DATABASE...")
     build_database(ver_dir, db_path, version)
 
     # Post-build validation
-    print(f"\n[VALIDATE]...")
+    print("\n[VALIDATE]...")
     ok, _ = validate(ver_dir, db_path)
 
     print(f"\nDONE. Delta: {len(rows)} messages (IDs {start_id} → {end_id})")
@@ -908,29 +999,31 @@ def cmd_full_refresh():
     end_id = rows[-1]["msg_id"]
 
     metadata = {
-        "runs": [{
-            "filename": filename,
-            "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
-            "message_count": len(rows),
-            "start_msg_id": start_id,
-            "end_msg_id": end_id,
-            "start_date": rows[0]["datetime_utc"],
-            "end_date": rows[-1]["datetime_utc"],
-        }],
+        "runs": [
+            {
+                "filename": filename,
+                "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                "message_count": len(rows),
+                "start_msg_id": start_id,
+                "end_msg_id": end_id,
+                "start_date": rows[0]["datetime_utc"],
+                "end_date": rows[-1]["datetime_utc"],
+            }
+        ],
         "last_msg_id": end_id,
         "total_messages": len(rows),
     }
     save_metadata(ver_dir, metadata)
 
     # Build DB
-    print(f"\n[3/3] BUILDING DATABASE...")
+    print("\n[3/3] BUILDING DATABASE...")
     build_database(ver_dir, db_path, new_ver)
 
     # Update DB symlink
     _update_symlink(DB_DIR, "current", os.path.basename(db_path))
 
     # Validate
-    print(f"\n[VALIDATE]...")
+    print("\n[VALIDATE]...")
     ok, _ = validate(ver_dir, db_path)
 
     print(f"\nDONE. v{new_ver}: {len(rows)} messages, DB at {db_path}")
@@ -949,7 +1042,7 @@ def cmd_rebuild_db():
 
     build_database(ver_dir, db_path, version)
 
-    print(f"\n[VALIDATE]...")
+    print("\n[VALIDATE]...")
     ok, _ = validate(ver_dir, db_path)
     return ok
 
@@ -973,6 +1066,7 @@ def cmd_validate():
 # ============================================================
 # MAIN
 # ============================================================
+
 
 def main():
     parser = argparse.ArgumentParser(
