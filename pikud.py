@@ -296,6 +296,47 @@ _MULTI_WORD_PREFIXES = [
     'עמק', 'מעיין', 'פנימיית', 'מכללת', 'שער',
 ]
 
+# Known compound city names (4+ words) starting with multi-word prefixes.
+# The prefix+1 rule in _split_space_separated_cities truncates these.
+# Sorted longest-first for greedy matching.
+_KNOWN_COMPOUND_CITIES = sorted([
+    # אזור תעשייה + multi-word suffix
+    'אזור תעשייה אכזיב מילואות',
+    'אזור תעשייה אלון התבור',
+    'אזור תעשייה אפק ולב הארץ',
+    'אזור תעשייה באר טוביה',
+    'אזור תעשייה בני יהודה',
+    'אזור תעשייה הדרומי אשקלון',
+    'אזור תעשייה הר טוב',
+    'אזור תעשייה חבל מודיעין',
+    'אזור תעשייה חבל מודיעין שוהם',
+    'אזור תעשייה חצור הגלילית',
+    'אזור תעשייה יקנעם עילית',
+    'אזור תעשייה כפר יונה',
+    'אזור תעשייה מבוא כרמל',
+    'אזור תעשייה מבואות הגלבוע',
+    'אזור תעשייה מילואות צפון',
+    'אזור תעשייה מישור אדומים',
+    'אזור תעשייה ניר עציון',
+    'אזור תעשייה עד הלום',
+    'אזור תעשייה עידן הנגב',
+    'אזור תעשייה עמק חפר',
+    'אזור תעשייה צפוני אשקלון',
+    'אזור תעשייה קדמת גליל',
+    'אזור תעשייה קריית ביאליק',
+    'אזור תעשייה קריית גת',
+    'אזור תעשייה רמת דלתון',
+    'אזור תעשייה שער בנימין',
+    'אזור תעשייה שער נעמן',
+    # מרכז אזורי + multi-word suffix
+    'מרכז אזורי דרום השרון',
+    'מרכז אזורי מבואות חרמון',
+    'מרכז אזורי מרום גליל',
+    'מרכז אזורי רמת כורזים',
+    # פארק תעשיות + multi-word suffix
+    'פארק תעשיות מגדל עוז',
+], key=lambda x: len(x.split()), reverse=True)
+
 
 def parse_cities(text: str) -> list[tuple[str, str | None]]:
     cities = []
@@ -343,30 +384,50 @@ def _split_space_separated_cities(text: str, stop_words: list[str]) -> list[tupl
             i += 1
             continue
 
-        # Check if this word starts a known multi-word city name
+        # Check if this word starts a known compound city name (longest match)
         matched_multi = False
-        for prefix in _MULTI_WORD_PREFIXES:
-            prefix_words = prefix.split()
-            if i + len(prefix_words) <= len(words):
-                candidate = ' '.join(words[i:i + len(prefix_words)])
-                if candidate == prefix or candidate.startswith(prefix):
-                    # Grab prefix + next word(s) as city name
-                    # Multi-word prefix: take prefix + 1 more word (e.g. "קריית שמונה", "בית שאן")
-                    end = i + len(prefix_words)
-                    if end < len(words) and not any(k in words[end] for k in stop_words):
-                        city_name = ' '.join(words[i:end + 1]).strip().strip('*').strip()
-                        if city_name and len(city_name) > 1:
-                            cities.append((city_name, None))
-                        i = end + 1
-                        matched_multi = True
-                        break
-                    else:
-                        city_name = candidate.strip().strip('*').strip()
-                        if city_name and len(city_name) > 1:
-                            cities.append((city_name, None))
-                        i += len(prefix_words)
-                        matched_multi = True
-                        break
+        for known in _KNOWN_COMPOUND_CITIES:
+            known_words = known.split()
+            if i + len(known_words) <= len(words):
+                candidate = ' '.join(words[i:i + len(known_words)])
+                if candidate == known:
+                    city_name = known
+                    i += len(known_words)
+                    # Check for dash-suffix (e.g. "אזור תעשייה הר טוב - צרעה")
+                    if i + 1 < len(words) and words[i] == '-':
+                        city_name = f"{city_name} - {words[i + 1]}"
+                        i += 2
+                    cities.append((city_name, None))
+                    matched_multi = True
+                    break
+
+        # Check if this word starts a known multi-word prefix
+        if not matched_multi:
+            for prefix in _MULTI_WORD_PREFIXES:
+                prefix_words = prefix.split()
+                if i + len(prefix_words) <= len(words):
+                    candidate = ' '.join(words[i:i + len(prefix_words)])
+                    if candidate == prefix or candidate.startswith(prefix):
+                        # Multi-word prefix: take prefix + 1 more word (e.g. "קריית שמונה", "בית שאן")
+                        end = i + len(prefix_words)
+                        if end < len(words) and not any(k in words[end] for k in stop_words):
+                            city_name = ' '.join(words[i:end + 1]).strip().strip('*').strip()
+                            i = end + 1
+                            # Check for dash-suffix (e.g. "אזור תעשייה נשר - רמלה")
+                            if i + 1 < len(words) and words[i] == '-':
+                                city_name = f"{city_name} - {words[i + 1]}"
+                                i += 2
+                            if city_name and len(city_name) > 1:
+                                cities.append((city_name, None))
+                            matched_multi = True
+                            break
+                        else:
+                            city_name = candidate.strip().strip('*').strip()
+                            if city_name and len(city_name) > 1:
+                                cities.append((city_name, None))
+                            i += len(prefix_words)
+                            matched_multi = True
+                            break
 
         if not matched_multi:
             # Single word city name — skip very short words (likely prepositions)

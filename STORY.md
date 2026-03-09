@@ -109,6 +109,16 @@ The fix: when no commas or shelter-time parentheses are found, split on spaces u
 
 An AI parser wouldn't catch this. It would produce plausible-looking output with wrong city counts, and you'd never know unless you searched for a specific city and got confused by the results.
 
+### The Prefix+1 Assumption
+
+The space-splitting fix used a "prefix + 1 word" rule: after matching a known prefix like "קריית", always take the next word to form the city name (e.g., "קריית שמונה"). This worked for single-word prefixes but silently broke for compound prefixes.
+
+"אזור תעשייה" (industrial zone) is a 2-word prefix. The rule took prefix + 1 = 3 words: "אזור תעשייה מישור". But the full city name is "אזור תעשייה מישור אדומים" — 4 words. The orphaned "אדומים" became its own phantom city in the database.
+
+This wasn't one city. Investigation revealed **18 truncated industrial zone entries** and their orphaned fragments, affecting "אזור תעשייה", "מרכז אזורי", and "פארק תעשיות" prefixes — all compound prefixes where the city name after the prefix is 2+ words. Cities like "אזור תעשייה רמת דלתון", "מרכז אזורי מבואות חרמון", and "אזור תעשייה קריית ביאליק" were all split.
+
+The fix: a known compound city names lookup with longest-match, tried before the prefix+1 fallback. The lookup is explicit (33 entries), testable, and backward-compatible — unknown compound names still get prefix+1. After rebuild: 18 truncated entries eliminated, orphan fragments gone. The lesson: every heuristic has edge cases, and "works for most data" is not "works for all data."
+
 ### Data Integrity Is Non-Negotiable
 
 Every pipeline run validates:

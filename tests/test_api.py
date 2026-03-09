@@ -458,16 +458,23 @@ class TestExport:
         assert "city_id" in header
         assert "city_name" in header
 
-    def test_manifest_cross_table_fields(self, client):
-        """Manifest should include cross-table calculated fields."""
+    def test_manifest_semantic_model_fields(self, client):
+        """Manifest should include semantic model calculated fields matching the deployed SDM."""
         import zipfile, io
         r = client.get("/api/export/raw")
         z = zipfile.ZipFile(io.BytesIO(r.data))
         manifest = json.loads(z.read("raw_only/manifest.json"))
-        assert "cross_table_fields" in manifest
-        names = [f["name"] for f in manifest["cross_table_fields"]]
-        assert "City Display Name" in names
-        assert "Is Real Alert" in names
+        assert "semantic_model_fields" in manifest
+        smf = manifest["semantic_model_fields"]
+        dim_names = [f["name"] for f in smf["calculated_dimensions"]]
+        assert "City_Display_Name" in dim_names
+        assert "Is_Real_Alert" in dim_names
+        assert "Israel_DateTime" in dim_names
+        assert "Hour_Label" in dim_names
+        assert "Alert_Date_Parsed" in dim_names
+        measure_names = [f["name"] for f in smf["calculated_measures"]]
+        assert "Alert_Count" in measure_names
+        assert "Zone_Alert_Count" in measure_names
 
     def test_manifest_has_tableau_next_names(self, client):
         """Raw manifest calculated fields should include Tableau Next field names."""

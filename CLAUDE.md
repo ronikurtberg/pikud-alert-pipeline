@@ -48,7 +48,7 @@ Telegram API → pikud.py (parse Hebrew) → SQLite (star schema) → dashboard.
 These rules are essential — getting them wrong produces plausible but incorrect data:
 
 - **Zone detection**: Only `**bold-marked**` text with "אזור" is a zone. Plain "אזור" can be a city name (e.g., "אזור תעשייה הדרומי אשקלון").
-- **City splitting**: Rocket alerts use commas. Aircraft alerts use spaces. Space-split requires a prefix dictionary: קריית, כפר, בית, נאות, גשר, נווה, כוכב, שדה, תל, בני, אבו, גבעת, מעלה, ראש, באר, עין, מצפה, רמת.
+- **City splitting**: Rocket alerts use commas. Aircraft alerts use spaces. Space-split requires a prefix dictionary: קריית, כפר, בית, נאות, גשר, נווה, כוכב, שדה, תל, בני, אבו, גבעת, מעלה, ראש, באר, עין, מצפה, רמת. Compound prefixes ("אזור תעשייה", "מרכז אזורי", "פארק תעשיות") need longest-match against `_KNOWN_COMPOUND_CITIES` — the prefix+1 rule truncates multi-word names like "אזור תעשייה מישור אדומים".
 - **Message types**: 9 categories — only `message_type='alert'` are real siren activations. Filter with `message_type='alert' AND is_drill=0`.
 - **Canonicalization**: 9 city pairs have dash/space variants (אבו-גוש / אבו גוש). Use `COALESCE(canonical_name, city_name)` for display.
 - **Timestamps**: Telegram UTC can be hours off from reality. The date/time in the Hebrew alert text is the ground truth.

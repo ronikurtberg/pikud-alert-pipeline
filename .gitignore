@@ -34,6 +34,9 @@ Thumbs.db
 .coverage
 htmlcov/
 
-# Claude
+# Claude / GSD
 .claude/
+.planning/
 *.iws
+*.iml
+*.ipr

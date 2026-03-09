@@ -18,9 +18,9 @@ CALCULATED_FIELDS = {
     "messages": {
         "datetime_israel": {
             "source": "datetime_utc",
-            "description": "Israel local time (IST/IDT) — use for hourly analysis",
+            "description": "Israel local time (UTC+2/3 by season) — DEPRECATED: use Israel_DateTime from text instead",
             "tableau_formula": 'IF DATEPART(\'month\', [Pikud_Message].[datetime_utc]) >= 4 AND DATEPART(\'month\', [Pikud_Message].[datetime_utc]) <= 10 THEN DATEADD(\'hour\', 3, [Pikud_Message].[datetime_utc]) ELSE DATEADD(\'hour\', 2, [Pikud_Message].[datetime_utc]) END',
-            "tableau_next_name": "Adjusted_Datetime_Based_On_Month",
+            "deprecated": True,
         },
         "message_type": {
             "source": "raw_text",
@@ -50,6 +50,7 @@ CALCULATED_FIELDS = {
             "source": "raw_text",
             "description": "Time as written in the alert text",
             "tableau_formula": 'REGEXP_EXTRACT([Pikud_Message].[raw_text], "(\\d{1,2}:\\d{2})")',
+            "tableau_next_name": "Alert_Time",
         },
     },
     "cities": {
@@ -106,26 +107,49 @@ RELATIONSHIPS = [
     {"from": "alert_details.zone_id", "to": "zones.zone_id", "type": "N:1", "description": "Each alert detail references one zone"},
 ]
 
-CROSS_TABLE_FIELDS = [
-    {"name": "City Display Name", "context": "Pikud_Alert_Detail (via Pikud_City)",
-     "tableau_formula": 'IF NOT ISNULL([Canonical_Name]) THEN [Canonical_Name] ELSE [Pikud_City].[city_name] END',
-     "purpose": "Unified city name for grouping (dash/space variants merged)"},
-    {"name": "Is Real Alert", "context": "Pikud_Alert_Detail (via Pikud_Message)",
-     "tableau_formula": '[Classify_Raw_Text_Event_Status] = "alert" AND [Is_Drill_Flag] = 0',
-     "purpose": "Boolean filter: TRUE for real siren activations only (excludes drills, updates, event_ended)"},
-    {"name": "Alert Date (from text)", "context": "Pikud_Message",
-     "tableau_formula": 'REGEXP_EXTRACT([Pikud_Message].[raw_text], "[\\[\\(](\\d{1,2}/\\d{1,2}/\\d{4})[\\]\\)]")',
-     "purpose": "Date extracted from Pikud's own alert text — ground truth Israel date"},
-    {"name": "Alert Date Parsed", "context": "Pikud_Message",
-     "tableau_formula": 'DATE(DATEPARSE("d/M/yyyy", [Alert_Date]))',
-     "purpose": "Proper date type from alert text — use for daily charts and date filters"},
-    {"name": "Hour Label", "context": "Pikud_Message",
-     "tableau_formula": 'IF DATEPART(\'hour\', [Adjusted_Datetime_Based_On_Month]) = 0 THEN "12 AM" ELSEIF DATEPART(\'hour\', [Adjusted_Datetime_Based_On_Month]) < 12 THEN STR(DATEPART(\'hour\', [Adjusted_Datetime_Based_On_Month])) + " AM" ELSEIF DATEPART(\'hour\', [Adjusted_Datetime_Based_On_Month]) = 12 THEN "12 PM" ELSE STR(DATEPART(\'hour\', [Adjusted_Datetime_Based_On_Month]) - 12) + " PM" END',
-     "purpose": "AM/PM formatted hour for hourly distribution charts"},
-    {"name": "Zone Alert Count", "context": "Pikud_Alert_Detail",
-     "tableau_formula": 'COUNTD(STR([Pikud_Alert_Detail].[msg_id]) + "-" + STR([Pikud_Alert_Detail].[zone_id]))',
-     "purpose": "Counts distinct message+zone pairs — no city-level inflation, but counts same zone multiple times across messages"},
-]
+CROSS_TABLE_FIELDS = {
+    "calculated_dimensions": [
+        {"name": "City_Display_Name", "context": "Pikud_Alert_Detail (via Pikud_City)",
+         "tableau_formula": 'IF NOT ISNULL([Canonical_Name]) THEN [Canonical_Name] ELSE [Pikud_City].[city_name] END',
+         "type": "Text",
+         "purpose": "Unified city name for grouping (dash/space variants merged)"},
+        {"name": "Is_Real_Alert", "context": "Pikud_Alert_Detail (via Pikud_Message)",
+         "tableau_formula": '[Classify_Raw_Text_Event_Status] = "alert" AND [Is_Drill_Flag] = 0',
+         "type": "Boolean",
+         "purpose": "Master filter for real siren activations only (excludes drills, updates, event_ended)"},
+        {"name": "Alert_Date_Parsed", "context": "Pikud_Message",
+         "tableau_formula": 'DATE(DATEPARSE("d/M/yyyy", [Alert_Date]))',
+         "type": "Date",
+         "depends_on": "Alert_Date",
+         "purpose": "Proper date type from alert text — use for daily charts and date filters"},
+        {"name": "Israel_DateTime", "context": "Pikud_Message",
+         "tableau_formula": 'DATEPARSE("d/M/yyyy H:mm", [Alert_Date] + " " + [Alert_Time])',
+         "type": "DateTime",
+         "depends_on": "Alert_Date, Alert_Time",
+         "purpose": "Full Israel datetime from Pikud's published text — single source of truth for all time analysis"},
+        {"name": "Hour_Label", "context": "Pikud_Message",
+         "tableau_formula": 'IF DATEPART(\'hour\', [Israel_DateTime]) = 0 THEN "12 AM" ELSEIF DATEPART(\'hour\', [Israel_DateTime]) < 12 THEN STR(DATEPART(\'hour\', [Israel_DateTime])) + " AM" ELSEIF DATEPART(\'hour\', [Israel_DateTime]) = 12 THEN "12 PM" ELSE STR(DATEPART(\'hour\', [Israel_DateTime]) - 12) + " PM" END',
+         "type": "Text",
+         "depends_on": "Israel_DateTime",
+         "purpose": "AM/PM formatted hour for hourly distribution charts"},
+    ],
+    "calculated_measures": [
+        {"name": "Alert_Count", "tableau_formula": 'COUNT([Pikud_Alert_Detail].[id])',
+         "purpose": "City-level alert count (each city mentioned = 1 count)"},
+        {"name": "Alert_Events", "tableau_formula": 'COUNTD([Pikud_Alert_Detail].[msg_id])',
+         "purpose": "Distinct message count (most conservative measure)"},
+        {"name": "Cities_Affected", "tableau_formula": 'COUNTD([Pikud_Alert_Detail].[city_id])',
+         "purpose": "Distinct cities alerted"},
+        {"name": "Zones_Affected", "tableau_formula": 'COUNTD([Pikud_Alert_Detail].[zone_id])',
+         "purpose": "Distinct defense zones alerted"},
+        {"name": "Rocket_Alerts", "tableau_formula": 'COUNTD(IF [Extract_Threat_Type] = "rockets" THEN [Pikud_Alert_Detail].[id] END)',
+         "purpose": "City-level rocket alert count"},
+        {"name": "Aircraft_Alerts", "tableau_formula": 'COUNTD(IF [Extract_Threat_Type] = "aircraft" THEN [Pikud_Alert_Detail].[id] END)',
+         "purpose": "City-level aircraft/drone alert count"},
+        {"name": "Zone_Alert_Count", "tableau_formula": 'COUNTD(STR([Pikud_Alert_Detail].[msg_id]) + "-" + STR([Pikud_Alert_Detail].[zone_id]))',
+         "purpose": "Distinct message+zone pairs — middle ground between city-level and event-level counting"},
+    ],
+}
 
 
 def export_to_zip(db, include_calculated: bool = True) -> bytes:
@@ -163,7 +187,7 @@ def export_to_zip(db, include_calculated: bool = True) -> bytes:
             "include_calculated_fields": include_calculated,
             "tables": {},
             "relationships": RELATIONSHIPS,
-            "cross_table_fields": CROSS_TABLE_FIELDS,
+            "semantic_model_fields": CROSS_TABLE_FIELDS,
             "tableau_guide": "See TABLEAU_GUIDE.md for step-by-step loading instructions",
         }
 

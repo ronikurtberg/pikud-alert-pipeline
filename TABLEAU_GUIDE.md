@@ -141,10 +141,10 @@ DATEPARSE("d/M/yyyy H:mm", [Alert_Date] + " " + [Alert_Time])
 
 **10. Hour_Label** (Text) — AM/PM formatted hour based on Israel_DateTime
 ```
-IIF(DATEPART('hour', [Israel_DateTime]) = 0, "12 AM",
-IIF(DATEPART('hour', [Israel_DateTime]) < 12, STR(DATEPART('hour', [Israel_DateTime])) + " AM",
-IIF(DATEPART('hour', [Israel_DateTime]) = 12, "12 PM",
-STR(DATEPART('hour', [Israel_DateTime]) - 12) + " PM")))
+IF DATEPART('hour', [Israel_DateTime]) = 0 THEN "12 AM"
+ELSEIF DATEPART('hour', [Israel_DateTime]) < 12 THEN STR(DATEPART('hour', [Israel_DateTime])) + " AM"
+ELSEIF DATEPART('hour', [Israel_DateTime]) = 12 THEN "12 PM"
+ELSE STR(DATEPART('hour', [Israel_DateTime]) - 12) + " PM" END
 ```
 
 > **Removed fields:** Adjusted_Datetime_Based_On_Month (UTC+2/3 was unreliable — up to 10 hour gaps from actual Israel time) and Israel_Time_Display (was based on Adjusted). All time fields now derive from Pikud's own published text.

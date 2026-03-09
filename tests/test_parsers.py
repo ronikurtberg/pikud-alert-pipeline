@@ -258,3 +258,84 @@ class TestParseCities:
         assert "גשר הזיו" in names
         assert "כפר בלום" in names
         assert "בן עמי" in names
+
+    def test_space_separated_compound_city_not_truncated(self):
+        """Compound city names like 'אזור תעשייה מישור אדומים' must not be split."""
+        cities = parse_cities("אזור תעשייה מישור אדומים")
+        names = [c[0] for c in cities]
+        assert "אזור תעשייה מישור אדומים" in names
+        assert "אדומים" not in names
+
+    def test_space_separated_compound_city_with_neighbors(self):
+        """Compound city in a list of space-separated cities."""
+        cities = parse_cities("כפר אדומים אזור תעשייה מישור אדומים מעלה אדומים")
+        names = [c[0] for c in cities]
+        assert "כפר אדומים" in names
+        assert "אזור תעשייה מישור אדומים" in names
+        assert "מעלה אדומים" in names
+        assert len(names) == 3
+
+    def test_space_separated_compound_industrial_zones(self):
+        """Multiple compound industrial zone names parsed correctly."""
+        cities = parse_cities("אזור תעשייה רמת דלתון אזור תעשייה אכזיב מילואות נהריה")
+        names = [c[0] for c in cities]
+        assert "אזור תעשייה רמת דלתון" in names
+        assert "אזור תעשייה אכזיב מילואות" in names
+        assert "נהריה" in names
+        assert "דלתון" not in names
+        assert "מילואות" not in names
+
+    def test_space_separated_merkaz_azori(self):
+        """מרכז אזורי compound names not truncated."""
+        cities = parse_cities("מרכז אזורי מבואות חרמון דלתון")
+        names = [c[0] for c in cities]
+        assert "מרכז אזורי מבואות חרמון" in names
+        assert "דלתון" in names
+        assert "חרמון" not in names
+
+    def test_space_separated_unknown_compound_falls_back(self):
+        """Unknown compound after prefix falls back to prefix + 1 word."""
+        cities = parse_cities("אזור תעשייה חדש נהריה")
+        names = [c[0] for c in cities]
+        assert "אזור תעשייה חדש" in names
+        assert "נהריה" in names
+
+    def test_space_separated_compound_with_dash_suffix(self):
+        """Compound city names with dash suffix parsed correctly."""
+        cities = parse_cities("אזור תעשייה נשר - רמלה")
+        names = [c[0] for c in cities]
+        assert "אזור תעשייה נשר - רמלה" in names
+        assert len(names) == 1
+
+    def test_space_separated_compound_known_with_dash_suffix(self):
+        """Known compound city name with dash suffix parsed correctly."""
+        cities = parse_cities("אזור תעשייה הר טוב - צרעה נהריה")
+        names = [c[0] for c in cities]
+        assert "אזור תעשייה הר טוב - צרעה" in names
+        assert "נהריה" in names
+
+    def test_space_separated_single_word_dash_suffix(self):
+        """Single-word city with dash suffix (e.g. 'חיפה - מערב')."""
+        cities = parse_cities("נהריה חיפה - מערב עכו")
+        names = [c[0] for c in cities]
+        assert "נהריה" in names
+        assert "חיפה - מערב" in names
+        assert "עכו" in names
+
+    def test_space_separated_prefix_at_end_of_text(self):
+        """Multi-word prefix at end of text with no following word."""
+        cities = parse_cities("נהריה אזור תעשייה")
+        names = [c[0] for c in cities]
+        assert "נהריה" in names
+        assert "אזור תעשייה" in names
+
+    def test_fallback_zone_parser_no_bold(self):
+        """Fallback zone parsing when no bold markers present."""
+        from pikud import extract_zones_and_cities
+        text = 'אזור קו העימות נהריה סער עברון'
+        results = extract_zones_and_cities(text)
+        assert len(results) == 1
+        zone, cities = results[0]
+        assert zone == "אזור קו העימות"
+        names = [c[0] for c in cities]
+        assert "נהריה" in names
