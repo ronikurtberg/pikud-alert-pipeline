@@ -536,7 +536,7 @@ tr:hover td{background:#f8f9ff}
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
       These fields are created in the Tableau Next Semantic Model. When using the <strong>Raw + Formulas</strong> export, recreate them from the manifest. The <strong>Full Export</strong> includes the base fields pre-computed.
     </div>
-    <div style="font-weight:700;font-size:12px;color:var(--text1);margin-bottom:8px">Calculated Dimensions (10)</div>
+      <div style="font-weight:700;font-size:12px;color:var(--text1);margin-bottom:8px">Calculated Dimensions (11)</div>
     <div id="tableau-calc-fields" style="font-size:11px">
       <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead><tr style="border-bottom:2px solid var(--border);text-align:left">
@@ -553,10 +553,18 @@ tr:hover td{background:#f8f9ff}
           <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>Alert_Date_Parsed</code></td><td style="padding:6px">Alert_Date</td><td style="padding:6px">Proper Date type for filters and daily charts</td><td style="padding:6px">Date</td></tr>
           <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>Israel_DateTime</code></td><td style="padding:6px">Alert_Date + Alert_Time</td><td style="padding:6px">Full Israel datetime — single source of truth</td><td style="padding:6px">DateTime</td></tr>
           <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>Hour_Label</code></td><td style="padding:6px">Israel_DateTime</td><td style="padding:6px">AM/PM formatted hour for hourly charts</td><td style="padding:6px">Text</td></tr>
+          <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px"><code>Shelter_Danger_Level</code></td>
+              <td style="padding:6px">shelter_time</td>
+              <td style="padding:6px">Sortable danger label (1-Immediate → 8-Aircraft)</td>
+              <td style="padding:6px">Text</td>
+          </tr>
         </tbody>
       </table>
     </div>
-    <div style="font-weight:700;font-size:12px;color:var(--text1);margin-top:14px;margin-bottom:8px">Calculated Measures (8)</div>
+      <div style="font-weight:700;font-size:12px;color:var(--text1);margin-top:14px;margin-bottom:8px">Calculated
+          Measures (14)
+      </div>
     <div style="font-size:11px">
       <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead><tr style="border-bottom:2px solid var(--border);text-align:left">
@@ -570,12 +578,100 @@ tr:hover td{background:#f8f9ff}
           <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>Rocket_Alerts</code></td><td style="padding:6px">COUNTD(IF rockets...)</td><td style="padding:6px">Rocket alert count</td></tr>
           <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>Aircraft_Alerts</code></td><td style="padding:6px">COUNTD(IF aircraft...)</td><td style="padding:6px">Aircraft/drone count</td></tr>
           <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>Zone_Alert_Count</code></td><td style="padding:6px">COUNTD(msg_id+zone_id)</td><td style="padding:6px">Zone-level count</td></tr>
-          <tr><td style="padding:6px"><code>Is_Drill_Flag</code></td><td style="padding:6px">IIF(CONTAINS "תרגיל")</td><td style="padding:6px">1=drill, 0=real (row-level measure)</td></tr>
+          <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px"><code>Is_Drill_Flag</code></td>
+              <td style="padding:6px">IIF(CONTAINS "תרגיל")</td>
+              <td style="padding:6px">1=drill, 0=real (row-level measure)</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px"><code>Shelter_Danger_Weight</code></td>
+              <td style="padding:6px">CASE shelter_time (10→0.5)</td>
+              <td style="padding:6px">Row-level danger weight, auto-SUMs</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px"><code>Civilian_Danger_Score</code></td>
+              <td style="padding:6px">SUM(Shelter_Danger_Weight)</td>
+              <td style="padding:6px">Total danger score</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px"><code>Avg_Danger_Per_Alert</code></td>
+              <td style="padding:6px">SUM(weight)/COUNT(id)</td>
+              <td style="padding:6px">Average severity 1-10 scale</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px"><code>Immediate_Danger_Rate</code></td>
+              <td style="padding:6px">COUNTD(IF מיידי...)/COUNT</td>
+              <td style="padding:6px">% alerts with zero shelter time</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px"><code>Night_Attack_Rate</code></td>
+              <td style="padding:6px">COUNTD(IF 0-6AM...)/COUNT</td>
+              <td style="padding:6px">Fraction of alerts midnight-6AM</td>
+          </tr>
+          <tr>
+              <td style="padding:6px"><code>Days_With_Sirens</code></td>
+              <td style="padding:6px">COUNTD(DATE(Israel_DateTime))</td>
+              <td style="padding:6px">Distinct calendar days with alerts</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+      <div style="font-weight:700;font-size:12px;color:var(--text1);margin-top:14px;margin-bottom:8px">Semantic Metrics
+          (6)
+      </div>
+      <div style="font-size:11px">
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+              <thead>
+              <tr style="border-bottom:2px solid var(--border);text-align:left">
+                  <th style="padding:6px">Metric</th>
+                  <th style="padding:6px">Based On</th>
+                  <th style="padding:6px">Description</th>
+                  <th style="padding:6px">Sentiment</th>
+              </tr>
+              </thead>
+              <tbody style="color:var(--text2)">
+              <tr style="border-bottom:1px solid var(--border)">
+                  <td style="padding:6px"><code>Days Under Fire</code></td>
+                  <td style="padding:6px">Days_With_Sirens</td>
+                  <td style="padding:6px">Calendar days with siren activations</td>
+                  <td style="padding:6px;color:var(--red)">Up is bad</td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border)">
+                  <td style="padding:6px"><code>Multi-Front Pressure</code></td>
+                  <td style="padding:6px">Zones_Affected</td>
+                  <td style="padding:6px">Defense zones under fire (36 total, &gt;25 = nationwide)</td>
+                  <td style="padding:6px;color:var(--red)">Up is bad</td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border)">
+                  <td style="padding:6px"><code>Immediate Danger %</code></td>
+                  <td style="padding:6px">Immediate_Danger_Rate</td>
+                  <td style="padding:6px">Alerts with zero shelter time (מיידי)</td>
+                  <td style="padding:6px;color:var(--red)">Up is bad</td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border)">
+                  <td style="padding:6px"><code>Night Terror Index</code></td>
+                  <td style="padding:6px">Night_Attack_Rate</td>
+                  <td style="padding:6px">Midnight-6AM attacks (psychological warfare)</td>
+                  <td style="padding:6px;color:var(--red)">Up is bad</td>
+              </tr>
+              <tr style="border-bottom:1px solid var(--border)">
+                  <td style="padding:6px"><code>Cities Under Fire</code></td>
+                  <td style="padding:6px">Cities_Affected</td>
+                  <td style="padding:6px">Distinct cities hearing sirens</td>
+                  <td style="padding:6px;color:var(--red)">Up is bad</td>
+              </tr>
+              <tr>
+                  <td style="padding:6px"><code>Avg Danger Level</code></td>
+                  <td style="padding:6px">Avg_Danger_Per_Alert</td>
+                  <td style="padding:6px">Severity 1-10 (10 = immediate, 1 = 90s)</td>
+                  <td style="padding:6px;color:var(--red)">Up is bad</td>
+              </tr>
         </tbody>
       </table>
     </div>
     <div style="font-size:10px;color:var(--text3);margin-top:10px">
-      Full formulas and Tableau Next syntax are in the <code>manifest.json</code> inside each export ZIP. See TABLEAU_GUIDE.md for the complete deployment guide with all 18 calculated fields.
+        Full formulas and Tableau Next syntax are in the <code>manifest.json</code> inside each export ZIP. See
+        TABLEAU_GUIDE.md for the complete deployment guide with all 25 calculated fields and 6 semantic metrics.
     </div>
   </div></div>
 

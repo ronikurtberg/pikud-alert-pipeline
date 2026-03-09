@@ -155,7 +155,8 @@ The Flask dashboard proved the data was solid. The next step: export it to Sales
 
 ### AI-Generated Calculated Fields Were Wrong
 
-Tableau Next's AI can auto-generate calculated fields from a natural language description. We gave it a precise spec: 4 DMOs, exact relationships, 7 calculated fields with Hebrew keyword patterns, 6 measures.
+Tableau Next's AI can auto-generate calculated fields from a natural language description. We gave it a precise spec: 4
+DMOs, exact relationships, 7 calculated fields with Hebrew keyword patterns, 14 measures, and 6 semantic metrics.
 
 The AI got 5 out of 7 fields wrong:
 - **message_type**: only checked for ONE keyword ("האירוע הסתיים" → "event_ended", else "other"). Missed alert, heads_up, update entirely. The most critical field — everything filters on it.
@@ -185,7 +186,8 @@ Each measure tells a different story. All three are needed. All three must be cl
 ## The Real Lesson
 
 The gap between "I can build a chart" and "I trust this data" is enormous. It's:
-- 18 calculated fields in Tableau Next with documented, tested formulas
+
+- 25 calculated fields + 6 semantic metrics in Tableau Next with documented, tested formulas
 - 8 validation checks running before and after every pipeline execution
 - 19 visualizations in the Flask dashboard + 6 in Tableau Next, with full metadata and SQL traceability
 - 3 different counting methodologies (events, cities, zones) clearly labeled

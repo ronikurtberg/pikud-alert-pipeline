@@ -83,7 +83,7 @@ We used Tableau Next's AI to auto-generate calculated fields from a natural lang
 
 All were manually corrected to the formulas below.
 
-### Calculated Dimensions (10 fields):
+### Calculated Dimensions (11 fields):
 
 **1. Classify_Raw_Text_Event_Status** (Text) — message classification
 ```
@@ -147,22 +147,46 @@ ELSEIF DATEPART('hour', [Israel_DateTime]) = 12 THEN "12 PM"
 ELSE STR(DATEPART('hour', [Israel_DateTime]) - 12) + " PM" END
 ```
 
+**11. Shelter_Danger_Level** (Text) — sortable danger label from shelter_time
+
+```
+CASE [Pikud_Alert_Detail].[shelter_time]
+    WHEN "מיידי" THEN "1-Immediate"
+    WHEN "15 שניות" THEN "2-Critical (15s)"
+    WHEN "30 שניות" THEN "3-Severe (30s)"
+    WHEN "45 שניות" THEN "4-High (45s)"
+    WHEN "דקה" THEN "5-Moderate (60s)"
+    WHEN "דקה וחצי" THEN "6-Standard (90s)"
+    WHEN "3 דקות" THEN "7-Extended (3m)"
+    ELSE "8-Aircraft (10m)"
+  END
+```
+
 > **Removed fields:** Adjusted_Datetime_Based_On_Month (UTC+2/3 was unreliable — up to 10 hour gaps from actual Israel time) and Israel_Time_Display (was based on Adjusted). All time fields now derive from Pikud's own published text.
 
-### Calculated Measures (8 fields):
+### Calculated Measures (14 fields):
 
-| Measure | Formula |
-|---|---|
-| **Alert_Count** | `COUNT([Pikud_Alert_Detail].[id])` |
-| **Alert_Events** | `COUNTD([Pikud_Alert_Detail].[msg_id])` |
-| **Cities_Affected** | `COUNTD([Pikud_Alert_Detail].[city_id])` |
-| **Zones_Affected** | `COUNTD([Pikud_Alert_Detail].[zone_id])` |
-| **Rocket_Alerts** | `COUNTD(IF [Extract_Threat_Type] = "rockets" THEN [Pikud_Alert_Detail].[id] END)` |
-| **Aircraft_Alerts** | `COUNTD(IF [Extract_Threat_Type] = "aircraft" THEN [Pikud_Alert_Detail].[id] END)` |
-| **Zone_Alert_Count** | `COUNTD(STR([Pikud_Alert_Detail].[msg_id]) + "-" + STR([Pikud_Alert_Detail].[zone_id]))` |
-| **Is_Drill_Flag** | `IIF(CONTAINS([Pikud_Message].[raw_text], "תרגיל"), 1, 0)` |
+| Measure                   | Formula                                                                                                                                                                                                         | Level     |
+|---------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------|
+| **Alert_Count**           | `COUNT([Pikud_Alert_Detail].[id])`                                                                                                                                                                              | Aggregate |
+| **Alert_Events**          | `COUNTD([Pikud_Alert_Detail].[msg_id])`                                                                                                                                                                         | Aggregate |
+| **Cities_Affected**       | `COUNTD([Pikud_Alert_Detail].[city_id])`                                                                                                                                                                        | Aggregate |
+| **Zones_Affected**        | `COUNTD([Pikud_Alert_Detail].[zone_id])`                                                                                                                                                                        | Aggregate |
+| **Rocket_Alerts**         | `COUNTD(IF [Extract_Threat_Type] = "rockets" THEN [Pikud_Alert_Detail].[id] END)`                                                                                                                               | Aggregate |
+| **Aircraft_Alerts**       | `COUNTD(IF [Extract_Threat_Type] = "aircraft" THEN [Pikud_Alert_Detail].[id] END)`                                                                                                                              | Aggregate |
+| **Zone_Alert_Count**      | `COUNTD(STR([Pikud_Alert_Detail].[msg_id]) + "-" + STR([Pikud_Alert_Detail].[zone_id]))`                                                                                                                        | Aggregate |
+| **Is_Drill_Flag**         | `IIF(CONTAINS([Pikud_Message].[raw_text], "תרגיל"), 1, 0)`                                                                                                                                                      | Row       |
+| **Shelter_Danger_Weight** | `CASE [Pikud_Alert_Detail].[shelter_time] WHEN "מיידי" THEN 10 WHEN "15 שניות" THEN 8 WHEN "30 שניות" THEN 6 WHEN "45 שניות" THEN 4 WHEN "דקה" THEN 2 WHEN "דקה וחצי" THEN 1 WHEN "3 דקות" THEN 0.5 ELSE 3 END` | Row       |
+| **Civilian_Danger_Score** | `SUM([Shelter_Danger_Weight])`                                                                                                                                                                                  | Aggregate |
+| **Avg_Danger_Per_Alert**  | `SUM(CASE ... END) / COUNT([Pikud_Alert_Detail].[id])`                                                                                                                                                          | Aggregate |
+| **Immediate_Danger_Rate** | `COUNTD(IF [Pikud_Alert_Detail].[shelter_time] = "מיידי" THEN [Pikud_Alert_Detail].[id] END) / COUNT([Pikud_Alert_Detail].[id]) * 100`                                                                          | Aggregate |
+| **Night_Attack_Rate**     | `COUNTD(IF DATEPART('hour', [Israel_DateTime]) >= 0 AND DATEPART('hour', [Israel_DateTime]) < 6 THEN [Pikud_Alert_Detail].[id] END) / COUNT([Pikud_Alert_Detail].[id])`                                         | Aggregate |
+| **Days_With_Sirens**      | `COUNTD(DATE([Israel_DateTime]))`                                                                                                                                                                               | Aggregate |
 
 > **Note on Is_Drill_Flag:** Tableau Next AI created this as a Measure. It works for Is_Real_Alert because the comparison `[Is_Drill_Flag] = 0` evaluates row-level. Ideally it should be a Dimension, but it functions correctly as-is.
+
+> **Note on Shelter_Danger_Weight:** This is a row-level measure so each alert_detail row gets a weight. Tableau
+> auto-SUMs it when aggregated. The ELSE 3 handles aircraft alerts (NULL shelter time).
 
 ### Important: Date/Time Fields — Which to Use Where
 
@@ -175,6 +199,35 @@ ELSE STR(DATEPART('hour', [Israel_DateTime]) - 12) + " PM" END
 | **Alert_Time** | (hidden) dependency for Israel_DateTime | Raw text string like "7:47" |
 
 **Why not UTC + offset?** We initially used Adjusted_Datetime_Based_On_Month (UTC + 2/3 hours). We discovered Telegram's UTC timestamp can differ from Pikud's published time by up to 10 hours — a message at UTC 21:47 March 7 had alert text showing "8/3/2026 7:47". The Pikud text is the official record. All time fields now derive from the raw Hebrew text, not from UTC conversion.
+
+### Semantic Metrics (6 metrics):
+
+Metrics are Tableau Next's way of defining "one number that matters" — a pre-built KPI with a measure, time dimension,
+and optional breakout dimensions. They power Pulse alerts, AI-generated insights, and goal tracking.
+
+All metrics below use `Israel_DateTime` as the time dimension and support Day/Week/Month/Quarter/Year grains.
+
+| Metric                   | Label                | Based On              | Breakout Dimensions            | Description                                                                     |
+|--------------------------|----------------------|-----------------------|--------------------------------|---------------------------------------------------------------------------------|
+| **Days_Under_Fire**      | Days Under Fire      | Days_With_Sirens      | —                              | Calendar days with siren activations                                            |
+| **Multi_Front_Pressure** | Multi-Front Pressure | Zones_Affected        | zone_name                      | Defense zones under fire (36 total — above 25 = nationwide)                     |
+| **Immediate_Danger_Pct** | Immediate Danger %   | Immediate_Danger_Rate | City_Display_Name, zone_name   | Alerts with zero shelter time (מיידי) — civilians with no time to reach shelter |
+| **Night_Terror_Index**   | Night Terror Index   | Night_Attack_Rate     | Extract_Threat_Type, zone_name | Alerts midnight–6 AM — measures psychological warfare                           |
+| **Cities_Under_Fire**    | Cities Under Fire    | Cities_Affected       | City_Display_Name              | Distinct cities hearing sirens in period                                        |
+| **Avg_Danger_Level**     | Avg Danger Level     | Avg_Danger_Per_Alert  | zone_name, city_name           | Severity 1-10 scale (10 = immediate, 1 = 90 seconds)                            |
+
+> **Sentiment:** All metrics are configured as "up is bad" — an increase in any metric means the situation is worsening.
+> Tableau Pulse uses this to correctly color trends red when values rise.
+
+### Creating Metrics in Tableau Next:
+
+1. Open the semantic model → **Metrics** tab → **New Metric**
+2. Set the **Measurement** to the calculated measure listed above
+3. Set **Time Dimension** to `Israel_DateTime`
+4. Enable time grains: Day, Week, Month, Quarter, Year
+5. Add **Additional Dimensions** from the table above for breakout analysis
+6. Set **Sentiment** to "Up is bad" for all metrics
+7. Save — the metric is now available in Pulse and for AI-generated insights
 
 ---
 
