@@ -175,8 +175,8 @@ class TestAuthConfirmValidation:
         import dashboard
 
         # Ensure no leftover state
-        dashboard._tg_client = None
-        dashboard._tg_phone_hash = None
+        dashboard._tg_phone_hash = ""
+        dashboard._tg_pending_phone = ""
 
         r = client.post(
             "/api/pipeline/auth/confirm",
