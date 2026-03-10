@@ -38,12 +38,13 @@ class TestFetchMessagesFastFail:
         mock_client.is_user_authorized = mock.AsyncMock(return_value=False)
         mock_client.disconnect = mock.AsyncMock()
 
-        mock_telethon = mock.MagicMock()
-        mock_telethon.TelegramClient = mock.MagicMock(return_value=mock_client)
-
+        # TelegramClient is a local `from telethon import TelegramClient` inside
+        # fetch_messages — patch it at the source module.
+        # API_ID/API_HASH are module-level constants — patch them directly.
         with (
-            mock.patch.dict(os.environ, {"TELEGRAM_API_ID": "123", "TELEGRAM_API_HASH": "abc"}),
-            mock.patch.dict(sys.modules, {"telethon": mock_telethon}),
+            mock.patch.object(pikud, "API_ID", "123"),
+            mock.patch.object(pikud, "API_HASH", "abc"),
+            mock.patch("telethon.TelegramClient", return_value=mock_client),
         ):
             result = asyncio.run(pikud.fetch_messages(min_id=100))
 
