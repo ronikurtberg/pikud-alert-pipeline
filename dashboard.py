@@ -1410,6 +1410,141 @@ def api_pipeline_running():
     return jsonify({"running": pipeline_running})
 
 
+# ── Telegram auth state (in-memory, one flow at a time) ──────────────────────
+# Only the phone_code_hash is kept between requests — no client instance is
+# held open, avoiding the "event loop must not change" error that Telethon
+# raises when you reuse a client across two asyncio.run() calls.
+_tg_pending_phone: str = ""
+_tg_phone_hash: str = ""
+
+
+def _tg_creds():
+    """Return (session_path, api_id_int, api_hash) or raise ValueError."""
+    api_id = os.environ.get("TELEGRAM_API_ID", "")
+    api_hash = os.environ.get("TELEGRAM_API_HASH", "")
+    if not api_id or not api_hash:
+        raise ValueError("missing_credentials")
+    return os.path.join(BASE_DIR, "pikud_session"), int(api_id), api_hash
+
+
+@app.route("/api/pipeline/auth_status")
+def api_pipeline_auth_status():
+    """Check whether the Telegram session is currently authorized."""
+    import asyncio
+
+    from telethon import TelegramClient
+
+    try:
+        session, api_id, api_hash = _tg_creds()
+    except ValueError:
+        return jsonify({"authorized": False, "reason": "missing_credentials"})
+
+    async def _check():
+        c = TelegramClient(session, api_id, api_hash)
+        await c.connect()
+        ok = await c.is_user_authorized()
+        await c.disconnect()
+        return ok
+
+    try:
+        ok = asyncio.run(_check())
+        return jsonify({"authorized": ok})
+    except Exception as e:
+        return jsonify({"authorized": False, "reason": str(e)})
+
+
+@app.route("/api/pipeline/auth/start", methods=["POST"])
+def api_pipeline_auth_start():
+    """Send OTP to phone. Stores only the phone_code_hash — no client kept open."""
+    import asyncio
+
+    from telethon import TelegramClient
+
+    global _tg_pending_phone, _tg_phone_hash
+
+    phone = (request.json or {}).get("phone", "").strip()
+    if not phone:
+        return jsonify({"ok": False, "error": "phone required"}), 400
+
+    try:
+        session, api_id, api_hash = _tg_creds()
+    except ValueError:
+        return jsonify({"ok": False, "error": "TELEGRAM_API_ID / TELEGRAM_API_HASH not set"}), 500
+
+    async def _start():
+        c = TelegramClient(session, api_id, api_hash)
+        await c.connect()
+        try:
+            result = await c.send_code_request(phone)
+            return result.phone_code_hash
+        finally:
+            await c.disconnect()
+
+    try:
+        hash_ = asyncio.run(_start())
+        _tg_pending_phone = phone
+        _tg_phone_hash = hash_
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/pipeline/auth/confirm", methods=["POST"])
+def api_pipeline_auth_confirm():
+    """Sign in with OTP code. Creates a fresh client — avoids event-loop reuse."""
+    import asyncio
+
+    from telethon import TelegramClient
+
+    global _tg_pending_phone, _tg_phone_hash
+
+    body = request.json or {}
+    phone = body.get("phone", "").strip()
+    code = body.get("code", "").strip()
+    password = body.get("password", "").strip()
+
+    if not phone or not code:
+        return jsonify({"ok": False, "error": "phone and code required"}), 400
+    if not _tg_phone_hash:
+        return jsonify({"ok": False, "error": "No active auth session — call /start first"}), 400
+
+    try:
+        session, api_id, api_hash = _tg_creds()
+    except ValueError:
+        return jsonify({"ok": False, "error": "TELEGRAM_API_ID / TELEGRAM_API_HASH not set"}), 500
+
+    saved_hash = _tg_phone_hash
+
+    async def _confirm():
+        from telethon.errors import SessionPasswordNeededError
+
+        c = TelegramClient(session, api_id, api_hash)
+        await c.connect()
+        try:
+            try:
+                await c.sign_in(phone, code, phone_code_hash=saved_hash)
+            except SessionPasswordNeededError:
+                if not password:
+                    raise ValueError("2FA_REQUIRED") from None
+                await c.sign_in(password=password)
+            me = await c.get_me()
+            return me.first_name, me.phone
+        finally:
+            await c.disconnect()
+
+    try:
+        name, ph = asyncio.run(_confirm())
+        _tg_pending_phone = ""
+        _tg_phone_hash = ""
+        return jsonify({"ok": True, "name": name, "phone": ph})
+    except ValueError as e:
+        if str(e) == "2FA_REQUIRED":
+            return jsonify({"ok": False, "error": "2FA_REQUIRED"})
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/refresh_db", methods=["POST"])
 def api_refresh_db():
     """Force-reset the shared DB connection to pick up rebuilt/updated database."""
