@@ -65,15 +65,15 @@ body.rtl .hdr .right{margin-left:0;margin-right:auto}
 .stat{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;position:relative;box-shadow:var(--shadow);overflow:visible}
 .stat::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
 .stat.red::before{background:var(--red)}.stat.blue::before{background:var(--blue)}.stat.green::before{background:var(--green)}.stat.purple::before{background:var(--purple)}.stat.orange::before{background:var(--orange)}.stat.cyan::before{background:var(--cyan)}
-.stat .lb{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);font-weight:800;margin-bottom:2px}
-.stat .val{font-size:24px;font-weight:900;letter-spacing:-.5px;line-height:1.1}
+.stat .lb{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);font-weight:800;margin-bottom:2px}
+.stat .val{font-size:30px;font-weight:900;letter-spacing:-.5px;line-height:1.1}
 .stat.red .val{color:var(--red)}.stat.blue .val{color:var(--blue)}.stat.green .val{color:var(--green)}.stat.purple .val{color:var(--purple)}.stat.orange .val{color:var(--orange)}.stat.cyan .val{color:var(--cyan)}
-.stat .sub{font-size:10px;color:var(--text3);margin-top:2px;cursor:help}
-.stat .big-icon{position:absolute;right:10px;bottom:6px;font-size:28px;opacity:.08}
+.stat .sub{font-size:12px;color:var(--text3);margin-top:3px;cursor:help}
+.stat .big-icon{position:absolute;right:10px;bottom:6px;font-size:32px;opacity:.08}
 
 /* TOOLTIP */
 [data-tip]{position:relative;cursor:help}
-[data-tip]:hover::after{content:attr(data-tip);position:absolute;top:100%;left:50%;transform:translateX(-50%);background:#1e1b4b;color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;white-space:pre-line;max-width:360px;z-index:200;box-shadow:var(--shadow2);line-height:1.6;font-weight:500;margin-top:4px}
+[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e1b4b;color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;white-space:pre-line;max-width:320px;max-height:140px;overflow-y:auto;z-index:9999;box-shadow:var(--shadow2);line-height:1.6;font-weight:500;pointer-events:none}
 
 /* TICKER */
 .ticker{background:linear-gradient(90deg,#fef2f2,#fff);border:2px solid #fecaca;border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:12px;animation:tp 3s infinite}
@@ -338,10 +338,50 @@ tr:hover td{background:#f8f9ff}
 
 <!-- ===== PIPELINE ===== -->
 <div class="page" id="page-pipeline">
+
+  <!-- Telegram Auth Panel (shown when not authorized) -->
+  <div id="tg-auth-panel" style="display:none;margin-bottom:12px">
+    <div class="card" style="border:2px solid var(--orange)">
+      <div class="card-h" style="background:#fff7ed"><h3 style="color:var(--orange)">🔐 Telegram Authentication Required</h3></div>
+      <div class="card-b">
+        <div id="tg-auth-step-phone" style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:12px;color:var(--text2)">Your Telegram session is missing or expired. Enter your phone number to receive a login code.</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="tg-phone" type="tel" class="filter-input" placeholder="+972501234567" style="width:200px">
+            <button class="btn primary" onclick="tgAuthStart()">Send Code</button>
+          </div>
+          <div id="tg-auth-phone-err" style="font-size:11px;color:var(--red);display:none"></div>
+        </div>
+        <div id="tg-auth-step-code" style="display:none;flex-direction:column;gap:8px">
+          <div style="font-size:12px;color:var(--text2)">Code sent to your Telegram app. Enter it below.</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="tg-code" type="text" class="filter-input" placeholder="12345" style="width:120px" maxlength="6">
+            <button class="btn primary" onclick="tgAuthConfirm()">Confirm</button>
+            <button class="btn" onclick="tgAuthReset()">← Back</button>
+          </div>
+          <div id="tg-auth-2fa" style="display:none;flex-direction:column;gap:6px;margin-top:4px">
+            <div style="font-size:12px;color:var(--orange)">⚠️ Two-factor authentication required.</div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input id="tg-password" type="password" class="filter-input" placeholder="Cloud password" style="width:200px">
+              <button class="btn primary" onclick="tgAuthConfirm()">Submit</button>
+            </div>
+          </div>
+          <div id="tg-auth-code-err" style="font-size:11px;color:var(--red);display:none"></div>
+        </div>
+        <div id="tg-auth-step-ok" style="display:none;align-items:center;gap:8px">
+          <span style="font-size:18px">✅</span>
+          <span id="tg-auth-ok-msg" style="font-size:12px;font-weight:700;color:var(--green)"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Row 1: Actions + Live Log | Stats -->
   <div class="grid g2">
     <div>
-      <div class="card"><div class="card-h"><h3>⚡ Pipeline Actions</h3></div><div class="card-b">
+      <div class="card"><div class="card-h"><h3>⚡ Pipeline Actions</h3>
+        <span id="tg-auth-badge" style="margin-left:auto;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px"></span>
+      </div><div class="card-b">
         <div id="pipe-indicator" class="pipe-status idle">● Idle</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn primary" onclick="runPipeline('delta')">▶ Delta</button>
@@ -893,7 +933,7 @@ document.addEventListener('click',e=>{if(!e.target.closest('.filter-group')){doc
 document.querySelectorAll('.tab').forEach(tb=>tb.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   tb.classList.add('active');document.getElementById('page-'+tb.dataset.page).classList.add('active');
-  if(tb.dataset.page==='model')loadModel();if(tb.dataset.page==='journey')loadJourney();if(tb.dataset.page==='pipeline'){loadPipeStats();loadVersions();loadLogs();}
+  if(tb.dataset.page==='model')loadModel();if(tb.dataset.page==='journey')loadJourney();if(tb.dataset.page==='pipeline'){loadPipeStats();loadVersions();loadLogs();checkTgAuth();}
 }));
 
 async function refreshAll(){showLoad('Loading data...');try{await Promise.all([loadOverview(),loadViz()]);}finally{hideLoad();}}
@@ -925,7 +965,7 @@ async function loadOverview(){
   function tip(key){
     const m=statSqlMeta[key];
     if(!m)return'';
-    return `${m.note}\n\n📊 SQL:\n${m.sql}`;
+    return m.note||'';
   }
   const avgMsgsPerEvent=fc.attack_events?(fc.msg_alerts/fc.attack_events).toFixed(1):'—';
   document.getElementById('stat-cards').innerHTML=`
@@ -938,11 +978,13 @@ async function loadOverview(){
 
   Plotly.newPlot('ov-daily',[{x:daily.map(d=>d.date),y:daily.map(d=>d.rockets),name:'Rockets',type:'bar',marker:{color:'#dc2626'}},{x:daily.map(d=>d.date),y:daily.map(d=>d.aircraft),name:'Aircraft',type:'bar',marker:{color:'#2563eb'}}],ml({barmode:'stack',margin:{t:8,b:30,l:40,r:8}}),PC);
   window._ovCities=cities;
+  window._ovHourly=hourly;
   plotCities(cities,'desc');
 }
 function plotCities(cities,order){
   const sorted=[...cities].sort((a,b)=>order==='asc'?a.alert_count-b.alert_count:b.alert_count-a.alert_count);
   Plotly.newPlot('ov-cities',[{x:sorted.map(c=>c.alert_count),y:sorted.map(c=>c.city_name),type:'bar',orientation:'h',marker:{color:sorted.map(c=>c.rocket_count>c.aircraft_count?'#dc2626':'#2563eb'),cornerradius:3},text:sorted.map(c=>c.alert_count),textposition:'outside',textfont:{size:11}}],ml({margin:{l:130,r:40},yaxis:{autorange:'reversed',tickfont:{size:12}}}),PC);
+  const hourly=window._ovHourly||[];
   Plotly.newPlot('ov-hourly',[{x:hourly.map(h=>`${String(h.hour_israel).padStart(2,'0')}:00`),y:hourly.map(h=>h.total),type:'bar',marker:{color:hourly.map(h=>h.total>800?'#dc2626':h.total>500?'#f59e0b':h.total>300?'#6366f1':'#22c55e'),cornerradius:3},text:hourly.map(h=>h.total),textposition:'outside',textfont:{size:9}}],ml({margin:{t:8,b:30,l:36,r:8}}),PC);
 }
 
@@ -1271,7 +1313,31 @@ function connectSSE(){
     }
   };
 }
+async function checkTgAuth(){
+  const r=await api('/api/pipeline/auth_status');
+  const badge=document.getElementById('tg-auth-badge');
+  const panel=document.getElementById('tg-auth-panel');
+  if(r.authorized){
+    badge.textContent='🔓 Telegram OK';
+    badge.style.background='#dcfce7';badge.style.color='#166534';
+    panel.style.display='none';
+  } else {
+    badge.textContent='🔐 Not authenticated';
+    badge.style.background='#fff7ed';badge.style.color='var(--orange)';
+    panel.style.display='block';
+  }
+  return r.authorized;
+}
 async function runPipeline(a){
+  const needsAuth=['delta','full_refresh'];
+  if(needsAuth.includes(a)){
+    const ok=await checkTgAuth();
+    if(!ok){
+      document.getElementById('tg-auth-panel').style.display='block';
+      document.getElementById('tg-auth-panel').scrollIntoView({behavior:'smooth',block:'start'});
+      return;
+    }
+  }
   if(!confirm(`Run "${a}"?`))return;
   document.getElementById('pipe-log').innerHTML='';
   document.getElementById('pipe-indicator').className='pipe-status running';
@@ -1282,6 +1348,52 @@ async function runPipeline(a){
     document.getElementById('pipe-indicator').className='pipe-status idle';
     document.getElementById('pipe-indicator').innerHTML='● Idle';
   }
+}
+// ── Telegram auth UI helpers ──
+function tgAuthReset(){
+  document.getElementById('tg-auth-step-phone').style.display='flex';
+  document.getElementById('tg-auth-step-code').style.display='none';
+  document.getElementById('tg-auth-step-ok').style.display='none';
+  document.getElementById('tg-auth-2fa').style.display='none';
+  document.getElementById('tg-auth-phone-err').style.display='none';
+  document.getElementById('tg-auth-code-err').style.display='none';
+}
+async function tgAuthStart(){
+  const phone=document.getElementById('tg-phone').value.trim();
+  const errEl=document.getElementById('tg-auth-phone-err');
+  errEl.style.display='none';
+  if(!phone){errEl.textContent='Enter a phone number.';errEl.style.display='block';return;}
+  const btn=event.target;btn.disabled=true;btn.textContent='Sending...';
+  const r=await api('/api/pipeline/auth/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone})});
+  btn.disabled=false;btn.textContent='Send Code';
+  if(!r.ok){errEl.textContent=r.error||'Failed to send code.';errEl.style.display='block';return;}
+  document.getElementById('tg-auth-step-phone').style.display='none';
+  document.getElementById('tg-auth-step-code').style.display='flex';
+  document.getElementById('tg-code').focus();
+}
+async function tgAuthConfirm(){
+  const phone=document.getElementById('tg-phone').value.trim();
+  const code=document.getElementById('tg-code').value.trim();
+  const password=document.getElementById('tg-password').value.trim();
+  const errEl=document.getElementById('tg-auth-code-err');
+  errEl.style.display='none';
+  const btn=event.target;btn.disabled=true;btn.textContent='Verifying...';
+  const r=await api('/api/pipeline/auth/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,code,password})});
+  btn.disabled=false;btn.textContent='Confirm';
+  if(!r.ok){
+    if(r.error==='2FA_REQUIRED'){
+      document.getElementById('tg-auth-2fa').style.display='flex';
+      document.getElementById('tg-password').focus();
+    } else {
+      errEl.textContent=r.error||'Invalid code.';errEl.style.display='block';
+    }
+    return;
+  }
+  document.getElementById('tg-auth-step-code').style.display='none';
+  const okEl=document.getElementById('tg-auth-step-ok');
+  document.getElementById('tg-auth-ok-msg').textContent=`Authenticated as ${r.name} (${r.phone}). You can now run Delta / Full Refresh.`;
+  okEl.style.display='flex';
+  checkTgAuth();
 }
 async function loadPipeStats(){
   const s=await api('/api/stats');if(s.error)return;

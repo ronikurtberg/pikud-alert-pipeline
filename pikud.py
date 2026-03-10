@@ -173,7 +173,11 @@ async def fetch_messages(min_id=0):
         return None
 
     client = TelegramClient(SESSION_FILE, int(API_ID), API_HASH)
-    await client.start()
+    await client.connect()
+    if not await client.is_user_authorized():
+        await client.disconnect()
+        print("Error: Telegram session is not authorized. Run `python pikud.py auth` to authenticate interactively.")
+        return None
 
     if min_id:
         print(f"  Fetching messages after ID {min_id}...")
@@ -620,7 +624,7 @@ def build_database(ver_dir: str, db_path: str, version: str) -> bool:
         return False
 
     # Pre-build data contracts — fail fast before touching the DB
-    from data_contracts import check_pre_build, check_post_build, ContractViolation
+    from data_contracts import ContractViolation, check_post_build, check_pre_build
     try:
         check_pre_build(ver_dir)
         print("  Pre-build contracts: PASSED")
@@ -1065,6 +1069,30 @@ def cmd_rebuild_db():
     return ok
 
 
+def cmd_auth():
+    """Interactive Telegram authentication — run this once to create/refresh the session file."""
+    import asyncio
+
+    from telethon import TelegramClient
+
+    if not API_ID or not API_HASH:
+        print("Error: Set TELEGRAM_API_ID and TELEGRAM_API_HASH environment variables.")
+        return False
+
+    async def _auth():
+        client = TelegramClient(SESSION_FILE, int(API_ID), API_HASH)
+        await client.start()
+        me = await client.get_me()
+        print(f"  Authenticated as: {me.first_name} ({me.phone})")
+        await client.disconnect()
+
+    print("=== TELEGRAM AUTH ===\n")
+    print(f"Session file: {SESSION_FILE}.session")
+    asyncio.run(_auth())
+    print("\n  Session saved. You can now run delta/full_refresh without re-authentication.")
+    return True
+
+
 def cmd_validate():
     """Run validation only."""
     print("=== VALIDATE ===\n")
@@ -1097,9 +1125,10 @@ Commands:
   rebuild_db     Rebuild DB from existing CSVs (no fetch)
   validate       Run validation checks on current data + DB
   status         Show current state: versions, counts, last run
+  auth           Authenticate with Telegram interactively (run once to create session)
         """,
     )
-    parser.add_argument("command", choices=["delta", "full_refresh", "rebuild_db", "validate", "status"])
+    parser.add_argument("command", choices=["delta", "full_refresh", "rebuild_db", "validate", "status", "auth"])
     args = parser.parse_args()
 
     commands = {
@@ -1108,6 +1137,7 @@ Commands:
         "full_refresh": cmd_full_refresh,
         "rebuild_db": cmd_rebuild_db,
         "validate": cmd_validate,
+        "auth": cmd_auth,
     }
 
     ok = commands[args.command]()
