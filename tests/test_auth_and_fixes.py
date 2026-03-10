@@ -41,8 +41,9 @@ class TestFetchMessagesFastFail:
         mock_telethon = mock.MagicMock()
         mock_telethon.TelegramClient = mock.MagicMock(return_value=mock_client)
 
-        with mock.patch.dict(os.environ, {"TELEGRAM_API_ID": "123", "TELEGRAM_API_HASH": "abc"}), mock.patch.dict(
-            sys.modules, {"telethon": mock_telethon}
+        with (
+            mock.patch.dict(os.environ, {"TELEGRAM_API_ID": "123", "TELEGRAM_API_HASH": "abc"}),
+            mock.patch.dict(sys.modules, {"telethon": mock_telethon}),
         ):
             result = asyncio.run(pikud.fetch_messages(min_id=100))
 
@@ -57,7 +58,7 @@ class TestFetchMessagesFastFail:
 
         import pikud
 
-        with mock.patch.dict(os.environ, {"TELEGRAM_API_ID": "", "TELEGRAM_API_HASH": ""}):
+        with mock.patch.object(pikud, "API_ID", ""), mock.patch.object(pikud, "API_HASH", ""):
             result = asyncio.run(pikud.fetch_messages(min_id=0))
 
         assert result is None
@@ -96,8 +97,9 @@ class TestAuthStatusEndpointNoCreds:
         mock_telethon = mock.MagicMock()
         mock_telethon.TelegramClient = mock.MagicMock(return_value=mock_client)
 
-        with mock.patch.dict(os.environ, {"TELEGRAM_API_ID": "123", "TELEGRAM_API_HASH": "abc"}), mock.patch.dict(
-            sys.modules, {"telethon": mock_telethon}
+        with (
+            mock.patch.dict(os.environ, {"TELEGRAM_API_ID": "123", "TELEGRAM_API_HASH": "abc"}),
+            mock.patch.dict(sys.modules, {"telethon": mock_telethon}),
         ):
             r = client.get("/api/pipeline/auth_status")
 
@@ -262,8 +264,6 @@ class TestCLIAuthCommand:
         """cmd_auth must be wired into main() so the subprocess invocation works."""
         import argparse
 
-        import pikud
-
         # Reconstruct the parser the same way main() does
         parser = argparse.ArgumentParser()
         parser.add_argument("command", choices=["delta", "full_refresh", "rebuild_db", "validate", "status", "auth"])
@@ -285,13 +285,13 @@ class TestCLIAuthCommand:
 
     def test_cmd_auth_does_not_block_without_credentials(self):
         """cmd_auth must return before asyncio.run when credentials are missing."""
-        import asyncio
-
         import pikud
 
-        with mock.patch.object(pikud, "API_ID", ""), mock.patch.object(pikud, "API_HASH", ""), mock.patch(
-            "asyncio.run"
-        ) as mock_run:
+        with (
+            mock.patch.object(pikud, "API_ID", ""),
+            mock.patch.object(pikud, "API_HASH", ""),
+            mock.patch("asyncio.run") as mock_run,
+        ):
             result = pikud.cmd_auth()
         assert result is False
         mock_run.assert_not_called()

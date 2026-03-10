@@ -625,6 +625,7 @@ def build_database(ver_dir: str, db_path: str, version: str) -> bool:
 
     # Pre-build data contracts — fail fast before touching the DB
     from data_contracts import ContractViolation, check_post_build, check_pre_build
+
     try:
         check_pre_build(ver_dir)
         print("  Pre-build contracts: PASSED")
