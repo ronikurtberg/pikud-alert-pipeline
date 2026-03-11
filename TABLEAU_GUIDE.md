@@ -378,12 +378,19 @@ You need to do a one-time schema migration for `Pikud_City` and `Pikud_Zone` DMO
 
 ### Migration steps:
 
-**Option A — Edit the existing Data Stream mapping (recommended):**
+**Option A — Re-upload the CSV with new columns (recommended):**
+
+Data Cloud does not have an "add field" button inside an existing Data Stream — new columns are picked up automatically when you upload a new file that contains them.
+
 1. **Setup > Data Cloud > Data Streams** → open `pikud_cities`
-2. Click **Edit** → go to the **Field Mapping** step
-3. Data Cloud will detect the new column `city_name_en` — map it as `Text`
-4. Save → the Data Stream re-ingests and adds the column to `Pikud_City` DMO
-5. Repeat for `pikud_zones` → map `zone_name_en` as `Text`
+2. Click **Refresh Data** (or **Upload File**, depending on your stream type)
+3. Upload the new `cities.csv` (which now includes the `city_name_en` column)
+4. After ingestion completes, open the stream → **Fields** tab — you should see `city_name_en` listed
+5. If the field is not mapped yet: click **Edit Mapping** → find `city_name_en` in the unmapped columns list → map it as `Text` → Save
+6. Repeat for `pikud_zones` → upload `zones.csv` → map `zone_name_en` as `Text`
+7. After both streams finish processing, open each DMO (`Pikud_City`, `Pikud_Zone`) and verify the new field appears under **Fields**
+
+> **Why no "Add Field" button?** Data Cloud derives the schema from the source file. You add fields by uploading a file that contains them — the UI then lets you map or ignore each new column.
 
 **Option B — Delete and recreate the Data Streams:**
 1. Delete `pikud_cities` and `pikud_zones` Data Streams (DMOs will also be deleted)
