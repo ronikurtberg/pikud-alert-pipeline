@@ -378,28 +378,34 @@ You need to do a one-time schema migration for `Pikud_City` and `Pikud_Zone` DMO
 
 ### Migration steps:
 
-**Option A — Re-upload the CSV with new columns (recommended):**
+**Option A — Add the field to the stream schema first, then re-upload (recommended):**
 
-Data Cloud does not have an "add field" button inside an existing Data Stream — new columns are picked up automatically when you upload a new file that contains them.
+Data Cloud validates uploads against the stream's registered schema. Uploading a CSV with a new column **before** registering it in the schema produces: _"Field city_name_en does not exist in data stream"_. You must extend the schema first.
 
 1. **Setup > Data Cloud > Data Streams** → open `pikud_cities`
-2. Click **Refresh Data** (or **Upload File**, depending on your stream type)
-3. Upload the new `cities.csv` (which now includes the `city_name_en` column)
-4. After ingestion completes, open the stream → **Fields** tab — you should see `city_name_en` listed
-5. If the field is not mapped yet: click **Edit Mapping** → find `city_name_en` in the unmapped columns list → map it as `Text` → Save
-6. Repeat for `pikud_zones` → upload `zones.csv` → map `zone_name_en` as `Text`
-7. After both streams finish processing, open each DMO (`Pikud_City`, `Pikud_Zone`) and verify the new field appears under **Fields**
+2. Click **Edit** (pencil icon, top right of the stream detail page)
+3. Navigate through the wizard until you reach the **Fields / Mapping** step (usually step 3 or 4)
+4. Look for an **"+ Add Field"** or **"Add Custom Field"** option — enter:
+   - Field name: `city_name_en`
+   - Type: `Text`
+5. Save and finish the wizard — this registers the field in the stream schema without uploading data yet
+6. Now upload the new `cities.csv` (which contains the `city_name_en` column) via **Refresh Data** → it will be accepted
+7. Repeat steps 1–6 for `pikud_zones` with field `zone_name_en` (Type: `Text`)
+8. After ingestion, open each DMO (`Pikud_City`, `Pikud_Zone`) → **Fields** tab → confirm the new field is listed
 
-> **Why no "Add Field" button?** Data Cloud derives the schema from the source file. You add fields by uploading a file that contains them — the UI then lets you map or ignore each new column.
+> **If you don't see "Add Field" in the Edit wizard:** your stream type may not support schema editing in place — use Option B below.
 
-**Option B — Delete and recreate the Data Streams:**
-1. Delete `pikud_cities` and `pikud_zones` Data Streams (DMOs will also be deleted)
-2. Re-upload `cities.csv` and `zones.csv` following Step 2 of this guide
+**Option B — Delete and recreate the Data Streams (guaranteed to work):**
+1. Delete `pikud_cities` and `pikud_zones` Data Streams (their DMOs will also be deleted)
+2. Re-upload `cities.csv` and `zones.csv` following Step 2 of this guide — the wizard will read all columns including `city_name_en` / `zone_name_en` from the new file
 3. Recreate `Pikud_City` and `Pikud_Zone` DMOs (Step 3)
-4. Re-add the relationships in the semantic model (Step 4) — `Pikud_Alert_Detail` FK joins are unchanged
-5. Recreate the `City_Display_Name` calculated field in the semantic model since it references `Pikud_City`
+4. Re-add the two relationships in the semantic model (Step 4):
+   - `Pikud_City.city_id → Pikud_Alert_Detail.city_id`
+   - `Pikud_Zone.zone_id → Pikud_Alert_Detail.zone_id`
+5. Recreate `City_Display_Name` calculated field (it references `Pikud_City` which was deleted)
+6. Add the two new calculated fields (see below)
 
-**Option A is safer** — relationships and calculated fields survive. Option B is a full rebuild.
+**Option B is the safest** when Option A's Edit wizard doesn't show an Add Field option.
 
 ### After migration — add these calculated fields to the semantic model:
 
