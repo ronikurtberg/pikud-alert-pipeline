@@ -532,7 +532,7 @@ tr:hover td{background:#f8f9ff}
       </div></div>
       <div class="card" style="border-top:3px solid var(--orange)"><div class="card-b" style="padding:14px">
         <div style="font-weight:800;font-size:14px;color:var(--orange);margin-bottom:6px">Raw + Formulas (For Data Pipelines)</div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6">Raw columns only (no calculated fields). The manifest includes tested Tableau formulas so you can recreate calculated fields in your semantic model. Best for recurring data refreshes.</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6">Raw + pre-translated columns — includes <code>city_name_en</code> and <code>zone_name_en</code> (no formula needed). Excludes fields computed from <code>raw_text</code> (message_type, alert_type, etc.). The manifest provides Tableau formulas for those. Best for recurring data refreshes.</div>
         <a href="/api/export/raw" class="btn" style="text-decoration:none;display:inline-block;font-size:13px;padding:8px 16px">Download Raw + Formulas</a>
       </div></div>
     </div>
