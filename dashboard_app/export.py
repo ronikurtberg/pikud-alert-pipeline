@@ -66,8 +66,8 @@ CALCULATED_FIELDS = {
 TABLE_DESCRIPTIONS = {
     "messages": "One row per Telegram message. Contains both alert and non-alert messages (event_ended, heads_up, etc.).",
     "alert_details": "One row per city per alert message. Fact table linking messages to cities and zones.",
-    "cities": "Dimension table: unique city/settlement names extracted from alerts.",
-    "zones": "Dimension table: 36 defense zones defined by Home Front Command.",
+    "cities": "Dimension table: unique city/settlement names extracted from alerts. city_name_en provides English transliterations (~92% coverage by alert volume).",
+    "zones": "Dimension table: 36 defense zones defined by Home Front Command. zone_name_en provides English names for all 36 zones.",
 }
 
 FIELD_DESCRIPTIONS = {
@@ -92,12 +92,14 @@ FIELD_DESCRIPTIONS = {
     },
     "cities": {
         "city_id": "Auto-increment primary key",
-        "city_name": "City name as it appears in Telegram text",
-        "canonical_name": "[CALCULATED] Normalized name for display (dash→space unification)",
+        "city_name": "City name as it appears in Telegram text (Hebrew)",
+        "canonical_name": "[CALCULATED] Normalized Hebrew name for display (dash→space unification)",
+        "city_name_en": "English transliteration of city name (NULL = not in translation source)",
     },
     "zones": {
         "zone_id": "Auto-increment primary key",
-        "zone_name": "Defense zone name (e.g., אזור קו העימות)",
+        "zone_name": "Defense zone name in Hebrew (e.g., אזור קו העימות)",
+        "zone_name_en": "English name of defense zone (e.g., Confrontation Line)",
     },
 }
 
@@ -129,7 +131,23 @@ CROSS_TABLE_FIELDS = {
             "context": "Pikud_Alert_Detail (via Pikud_City)",
             "tableau_formula": "IF NOT ISNULL([Canonical_Name]) THEN [Canonical_Name] ELSE [Pikud_City].[city_name] END",
             "type": "Text",
-            "purpose": "Unified city name for grouping (dash/space variants merged)",
+            "purpose": "Unified Hebrew city name for grouping (dash/space variants merged)",
+        },
+        {
+            "name": "City_Display_Name_EN",
+            "context": "Pikud_Alert_Detail (via Pikud_City)",
+            "tableau_formula": "IF NOT ISNULL([Pikud_City].[city_name_en]) THEN [Pikud_City].[city_name_en] ELSEIF NOT ISNULL([Canonical_Name]) THEN [Canonical_Name] ELSE [Pikud_City].[city_name] END",
+            "type": "Text",
+            "purpose": "English city name with Hebrew fallback — use for all English-language dashboards. 100% coverage enforced.",
+            "source_fields": ["city_name_en", "canonical_name", "city_name"],
+        },
+        {
+            "name": "Zone_Display_Name_EN",
+            "context": "Pikud_Alert_Detail (via Pikud_Zone)",
+            "tableau_formula": "IF NOT ISNULL([Pikud_Zone].[zone_name_en]) THEN [Pikud_Zone].[zone_name_en] ELSE [Pikud_Zone].[zone_name] END",
+            "type": "Text",
+            "purpose": "English zone name with Hebrew fallback — use for all English-language dashboards. All 36 zones translated.",
+            "source_fields": ["zone_name_en", "zone_name"],
         },
         {
             "name": "Is_Real_Alert",

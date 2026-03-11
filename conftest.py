@@ -52,6 +52,19 @@ def temp_db():
 
 
 @pytest.fixture
+def db_conn():
+    """Read-only connection to the current production database (db/current symlink)."""
+    path = os.path.join(os.path.dirname(__file__), "db", "current")
+    if not os.path.exists(path):
+        pytest.skip("Production DB not found — run 'make fetch' first")
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only=ON")
+    yield conn
+    conn.close()
+
+
+@pytest.fixture
 def app():
     """Flask test app."""
     import dashboard

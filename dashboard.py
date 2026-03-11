@@ -1860,6 +1860,22 @@ TRANSFORMATIONS = [
         "note": "Not available in all messages. Represents how long residents have to reach shelter.",
         "purpose": "Shelter time distribution chart, risk assessment per city.",
     },
+    {
+        "field": "city_name_en",
+        "table": "cities",
+        "source": "city_name (post-build enrichment via _apply_english_names())",
+        "formula": "Lookup city_name in cities_translations.json (external source, ~1,400 cities) then CITY_MANUAL_EN dictionary (~600 manual entries). JSON takes precedence on overlap.",
+        "note": "100% coverage required — post-build contract fails if any city used in alert_details is missing an English name. Add new cities to dashboard_app/city_translations_manual.py.",
+        "purpose": "English-language display in Tableau / Data Cloud dashboards. Use via City_Display_Name_EN calculated field.",
+    },
+    {
+        "field": "zone_name_en",
+        "table": "zones",
+        "source": "zone_name (post-build enrichment via _apply_english_names())",
+        "formula": "Strip 'אזור ' prefix, lookup remainder in cities_translations.json zone field, fall back to _ZONE_MANUAL_EN hardcoded dictionary (9 zones not in external source).",
+        "note": "100% coverage — all 36 zones translated. Post-build contract fails if any zone is missing. Add new zones to _ZONE_MANUAL_EN in pikud.py.",
+        "purpose": "English-language display in Tableau / Data Cloud dashboards. Use via Zone_Display_Name_EN calculated field.",
+    },
 ]
 
 

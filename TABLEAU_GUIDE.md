@@ -350,7 +350,7 @@ All visualizations use these base filters:
 
 ## Step 8: Updating Data
 
-### Refresh Flow:
+### Refresh Flow (routine data update):
 1. Run `python3 pikud.py delta` to fetch new alerts
 2. Export from the dashboard Pipeline page (either mode)
 3. Upload new CSVs to each Data Stream (Full Refresh mode replaces all data)
@@ -360,6 +360,69 @@ All visualizations use these base filters:
 
 ### Important: DMO Sync Delay
 After uploading new Data Stream files, the DMOs need time to process. Check each DMO's sync status before expecting updated numbers in your vizzes.
+
+---
+
+## Step 8b: Schema Migration — Adding New Columns (one-time)
+
+The `cities` and `zones` tables now include English name columns (`city_name_en`, `zone_name_en`). These did not exist when you originally set up the DMOs. **Uploading the new CSV alone is not enough** — Data Cloud will silently ignore columns it hasn't seen before.
+
+You need to do a one-time schema migration for `Pikud_City` and `Pikud_Zone` DMOs.
+
+### New columns added:
+
+| Table | New Column | Description |
+|---|---|---|
+| `cities.csv` | `city_name_en` | English city name (e.g., "Abu Gosh") — ~92% coverage by alert volume |
+| `zones.csv` | `zone_name_en` | English zone name (e.g., "Confrontation Line") — 36/36 zones covered |
+
+### Migration steps:
+
+**Option A — Add the field to the stream schema first, then re-upload (recommended):**
+
+Data Cloud validates uploads against the stream's registered schema. Uploading a CSV with a new column **before** registering it in the schema produces: _"Field city_name_en does not exist in data stream"_. You must extend the schema first.
+
+1. **Setup > Data Cloud > Data Streams** → open `pikud_cities`
+2. Click **Edit** (pencil icon, top right of the stream detail page)
+3. Navigate through the wizard until you reach the **Fields / Mapping** step (usually step 3 or 4)
+4. Look for an **"+ Add Field"** or **"Add Custom Field"** option — enter:
+   - Field name: `city_name_en`
+   - Type: `Text`
+5. Save and finish the wizard — this registers the field in the stream schema without uploading data yet
+6. Now upload the new `cities.csv` (which contains the `city_name_en` column) via **Refresh Data** → it will be accepted
+7. Repeat steps 1–6 for `pikud_zones` with field `zone_name_en` (Type: `Text`)
+8. After ingestion, open each DMO (`Pikud_City`, `Pikud_Zone`) → **Fields** tab → confirm the new field is listed
+
+> **If you don't see "Add Field" in the Edit wizard:** your stream type may not support schema editing in place — use Option B below.
+
+**Option B — Delete and recreate the Data Streams (guaranteed to work):**
+1. Delete `pikud_cities` and `pikud_zones` Data Streams (their DMOs will also be deleted)
+2. Re-upload `cities.csv` and `zones.csv` following Step 2 of this guide — the wizard will read all columns including `city_name_en` / `zone_name_en` from the new file
+3. Recreate `Pikud_City` and `Pikud_Zone` DMOs (Step 3)
+4. Re-add the two relationships in the semantic model (Step 4):
+   - `Pikud_City.city_id → Pikud_Alert_Detail.city_id`
+   - `Pikud_Zone.zone_id → Pikud_Alert_Detail.zone_id`
+5. Recreate `City_Display_Name` calculated field (it references `Pikud_City` which was deleted)
+6. Add the two new calculated fields (see below)
+
+**Option B is the safest** when Option A's Edit wizard doesn't show an Add Field option.
+
+### After migration — add these calculated fields to the semantic model:
+
+**City_Display_Name_EN** (Text) — English city name with Hebrew fallback
+```
+IF NOT ISNULL([Pikud_City].[city_name_en]) THEN [Pikud_City].[city_name_en]
+ELSEIF NOT ISNULL([Pikud_City].[canonical_name]) THEN [Pikud_City].[canonical_name]
+ELSE [Pikud_City].[city_name] END
+```
+
+**Zone_Display_Name_EN** (Text) — English zone name with Hebrew fallback
+```
+IF NOT ISNULL([Pikud_Zone].[zone_name_en]) THEN [Pikud_Zone].[zone_name_en]
+ELSE [Pikud_Zone].[zone_name] END
+```
+
+Replace `City_Display_Name` and `zone_name` with these fields in all vizzes where you want English labels.
 
 ### Automation:
 ```bash
