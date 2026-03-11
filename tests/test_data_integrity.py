@@ -105,6 +105,56 @@ class TestCityCanonicalInViz:
                 assert space not in names
 
 
+class TestEnglishTranslationCoverage:
+    """Every city used in alerts and every zone must have an English name.
+
+    If this test fails after a rebuild it means either:
+    - A new city/location appeared in the Pikud HaOref data (add to city_translations_manual.py)
+    - A parser bug produced a new artifact city (fix the parser first)
+    - A new zone was added by Pikud HaOref (add to _ZONE_MANUAL_EN in pikud.py)
+    """
+
+    def test_all_alert_cities_have_english_name(self, db_conn):
+        """Every city referenced in alert_details must have city_name_en populated."""
+        rows = db_conn.execute(
+            "SELECT c.city_name "
+            "FROM cities c "
+            "WHERE c.city_name_en IS NULL "
+            "AND EXISTS (SELECT 1 FROM alert_details ad WHERE ad.city_id = c.city_id) "
+            "ORDER BY c.city_name"
+        ).fetchall()
+        missing = [r[0] for r in rows]
+        assert not missing, (
+            f"{len(missing)} cities used in alerts are missing English translations. "
+            f"Add them to dashboard_app/city_translations_manual.py: {missing}"
+        )
+
+    def test_all_zones_have_english_name(self, db_conn):
+        """Every zone in the zones table must have zone_name_en populated."""
+        rows = db_conn.execute(
+            "SELECT zone_name FROM zones WHERE zone_name_en IS NULL ORDER BY zone_name"
+        ).fetchall()
+        missing = [r[0] for r in rows]
+        assert not missing, (
+            f"{len(missing)} zones are missing English translations. "
+            f"Add them to _ZONE_MANUAL_EN in pikud.py: {missing}"
+        )
+
+    def test_no_cities_without_alerts_are_untranslated(self, db_conn):
+        """Cities not in any alert (orphans) should also be translated — warn if not."""
+        # This is a softer check: we report but don't hard-fail for unreferenced cities
+        # because they may be parser artifacts that simply never fired an alert.
+        rows = db_conn.execute(
+            "SELECT COUNT(*) FROM cities WHERE city_name_en IS NULL"
+        ).fetchone()
+        total_untranslated = rows[0]
+        # All should be zero after a clean rebuild with full translation coverage
+        assert total_untranslated == 0, (
+            f"{total_untranslated} cities (including unreferenced ones) lack English names. "
+            f"Run: scripts/enrich_english_names.py then check for new parser artifacts."
+        )
+
+
 class TestDataVersionIntegrity:
     """Verify data version metadata is consistent."""
 

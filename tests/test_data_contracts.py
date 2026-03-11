@@ -35,8 +35,13 @@ def good_db(tmp_path):
     db_path = str(tmp_path / "test.db")
     conn = sqlite3.connect(db_path)
     conn.executescript("""
-        CREATE TABLE zones (zone_id INTEGER PRIMARY KEY, zone_name TEXT);
-        CREATE TABLE cities (city_id INTEGER PRIMARY KEY, city_name TEXT, canonical_name TEXT);
+        CREATE TABLE zones (
+            zone_id INTEGER PRIMARY KEY, zone_name TEXT, zone_name_en TEXT
+        );
+        CREATE TABLE cities (
+            city_id INTEGER PRIMARY KEY, city_name TEXT, canonical_name TEXT,
+            city_name_en TEXT
+        );
         CREATE TABLE messages (
             msg_id INTEGER PRIMARY KEY, datetime_utc TEXT, datetime_israel TEXT,
             alert_date TEXT, alert_time_local TEXT, message_type TEXT NOT NULL,
@@ -47,10 +52,10 @@ def good_db(tmp_path):
             zone_id INTEGER, city_id INTEGER, shelter_time TEXT
         );
     """)
-    conn.execute("INSERT INTO zones VALUES (1, 'אזור דרום')")
-    conn.execute("INSERT INTO zones VALUES (2, 'אזור צפון')")
-    conn.execute("INSERT INTO cities VALUES (1, 'אשדוד', NULL)")
-    conn.execute("INSERT INTO cities VALUES (2, 'חיפה', NULL)")
+    conn.execute("INSERT INTO zones VALUES (1, 'אזור דרום', 'South Zone')")
+    conn.execute("INSERT INTO zones VALUES (2, 'אזור צפון', 'North Zone')")
+    conn.execute("INSERT INTO cities VALUES (1, 'אשדוד', NULL, 'Ashdod')")
+    conn.execute("INSERT INTO cities VALUES (2, 'חיפה', NULL, 'Haifa')")
     conn.execute(
         "INSERT INTO messages VALUES (1, '2026-03-01 12:00:00', '2026-03-01 14:00:00', "
         "'1/3/2026', '12:00', 'alert', 'rockets', 0, 'ירי רקטות', '100')"
@@ -238,6 +243,25 @@ class TestPostBuild:
         """Non-alert messages without alert_details should pass."""
         # msg_id 2 is event_ended with no details — should be fine
         check_post_build(good_db)
+
+    def test_missing_city_en_fails(self, good_db):
+        """City used in alert_details without English name should fail."""
+        conn = sqlite3.connect(good_db)
+        conn.execute("INSERT INTO cities VALUES (99, 'עיר חדשה', NULL, NULL)")
+        conn.execute("INSERT INTO alert_details (msg_id, zone_id, city_id) VALUES (1, 1, 99)")
+        conn.commit()
+        conn.close()
+        with pytest.raises(ContractViolation, match="Missing English translation"):
+            check_post_build(good_db)
+
+    def test_missing_zone_en_fails(self, good_db):
+        """Zone without English name should fail."""
+        conn = sqlite3.connect(good_db)
+        conn.execute("INSERT INTO zones VALUES (99, 'אזור חדש', NULL)")
+        conn.commit()
+        conn.close()
+        with pytest.raises(ContractViolation, match="Missing English translation"):
+            check_post_build(good_db)
 
 
 class TestContractViolation:

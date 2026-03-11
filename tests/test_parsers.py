@@ -345,3 +345,162 @@ class TestParseCities:
         assert zone == "אזור קו העימות"
         names = [c[0] for c in cities]
         assert "נהריה" in names
+
+    def test_ashdod_neighborhood_comma_groups(self):
+        """Ashdod neighborhoods in comma groups must keep the city prefix."""
+        # Bug: "אשדוד - א,ב,ד,ה" was splitting to "אשדוד - א", "ב", "ד", "ה"
+        text = "🚨 **עדכון - התרעות** 🚨 [12/11/2019] בשעה 5:50 הופעלה התרעה ב: **אזור לכיש** אשדוד - יא,יב,טו,יז,מרינה (45 שניות) אשדוד - א,ב,ד,ה (45 שניות)"
+        results = extract_zones_and_cities(text)
+        assert len(results) == 1
+        _, cities = results[0]
+        names = [c[0] for c in cities]
+        assert "אשדוד - יא" in names
+        assert "אשדוד - יב" in names
+        assert "אשדוד - טו" in names
+        assert "אשדוד - יז" in names
+        assert "אשדוד - מרינה" in names
+        assert "אשדוד - א" in names
+        assert "אשדוד - ב" in names
+        assert "אשדוד - ד" in names
+        assert "אשדוד - ה" in names
+        assert "יב" not in names
+        assert "טו" not in names
+        assert "מרינה" not in names
+        assert "ב" not in names
+
+    def test_ashdod_no_space_before_dash(self):
+        """'אשדוד -יא,יב' (no space before dash) must also be prefixed correctly."""
+        text = "🚨 **ירי רקטות וטילים [6/8/2022] 12:01** **אזור לכיש** אשדוד - א,ב,ד,ה (45 שניות) אשדוד -יא,יב,טו,יז,מרינה,סיטי (45 שניות)"
+        results = extract_zones_and_cities(text)
+        assert len(results) == 1
+        _, cities = results[0]
+        names = [c[0] for c in cities]
+        assert "אשדוד - א" in names
+        assert "אשדוד - ב" in names
+        # No-space dash variant
+        assert "אשדוד -יא" in names or "אשדוד - יא" in names
+        assert "יב" not in names
+        assert "מרינה" not in names
+        assert "סיטי" not in names
+
+    def test_ashdod_multiple_groups_no_double_prefix(self):
+        """When multiple 'City - ...' groups are comma-separated, no double-prefix."""
+        # Pattern: "אשדוד - א,ב,ד,ה, אשדוד - ג,ו,ז"
+        text = "**אזור לכיש** אשדוד - א,ב,ד,ה, אשדוד - ג,ו,ז (**45 שניות**)"
+        results = extract_zones_and_cities(text)
+        assert len(results) == 1
+        _, cities = results[0]
+        names = [c[0] for c in cities]
+        assert "אשדוד - א" in names
+        assert "אשדוד - ב" in names
+        assert "אשדוד - ג" in names
+        assert "אשדוד - ו" in names
+        # Must NOT produce double prefix
+        assert not any("אשדוד - אשדוד" in n for n in names)
+
+    def test_hashas_not_parsed_as_city(self):
+        """'חשש לחדירת מחבלים' suffix must not produce city names."""
+        text = "🔓 **חדירת מחבלים [29/2/2024] 17:28** **אזור שומרון** עלי **חשש לחדירת מחבלים** היכנסו מיד למרחב מוגן"
+        results = extract_zones_and_cities(text)
+        assert len(results) == 1
+        _, cities = results[0]
+        names = [c[0] for c in cities]
+        assert "עלי" in names
+        assert "חשש" not in names
+        assert "מחבלים" not in names
+        assert "לחדירת" not in names
+
+
+class TestParseCitiesSpaceSplitMissingPrefixes:
+    """Regression tests for space-split compound cities whose prefixes were missing."""
+
+    def test_vered_hagalil(self):
+        cities = parse_cities("ורד הגליל כורזים")
+        names = [c[0] for c in cities]
+        assert "ורד הגליל" in names
+        assert "ורד" not in names
+
+    def test_mevo_hama(self):
+        cities = parse_cities("מבוא חמה כפר חרוב")
+        names = [c[0] for c in cities]
+        assert "מבוא חמה" in names
+        assert "חמה" not in names
+
+    def test_majdal_shams(self):
+        cities = parse_cities("מג'דל שמס מסעדה")
+        names = [c[0] for c in cities]
+        assert "מג'דל שמס" in names
+        assert "שמס" not in names
+
+    def test_kadmat_tzvi(self):
+        cities = parse_cities("קדמת צבי קצרין")
+        names = [c[0] for c in cities]
+        assert "קדמת צבי" in names
+        assert "צבי" not in names
+
+    def test_kerem_ben_zimra(self):
+        cities = parse_cities("כרם בן זמרה יראון")
+        names = [c[0] for c in cities]
+        assert "כרם בן זמרה" in names
+        assert "כרם" not in names
+
+    def test_ali_zahav(self):
+        cities = parse_cities("עלי זהב")
+        names = [c[0] for c in cities]
+        assert "עלי זהב" in names
+        assert "זהב" not in names
+
+    def test_karmi_tzur(self):
+        cities = parse_cities("כרמי צור")
+        names = [c[0] for c in cities]
+        assert "כרמי צור" in names
+        assert "צור" not in names
+
+    def test_neve_itan(self):
+        """'נוה' (alternate spelling of נווה) should work as prefix."""
+        cities = parse_cities("נוה איתן כפר רופין")
+        names = [c[0] for c in cities]
+        assert "נוה איתן" in names
+        assert "נוה" not in names
+
+    def test_sdei_trumot(self):
+        cities = parse_cities("שדי תרומות בית שאן")
+        names = [c[0] for c in cities]
+        assert "שדי תרומות" in names
+        assert "שדי" not in names
+
+    def test_gani_hoga(self):
+        cities = parse_cities("גני חוגה בית שאן")
+        names = [c[0] for c in cities]
+        assert "גני חוגה" in names
+        assert "גני" not in names
+
+    def test_rafting_nahar_hayarden(self):
+        cities = parse_cities("רפטינג נהר הירדן")
+        names = [c[0] for c in cities]
+        assert "רפטינג נהר הירדן" in names
+        assert "נהר" not in names
+
+    def test_batei_malon_yam_hamelach(self):
+        cities = parse_cities("בתי מלון ים המלח")
+        names = [c[0] for c in cities]
+        assert "בתי מלון ים המלח" in names
+        assert "בתי" not in names
+
+    def test_pardes_hana_karkur(self):
+        cities = parse_cities("פרדס חנה כרכור")
+        names = [c[0] for c in cities]
+        assert "פרדס חנה כרכור" in names
+        assert "חנה" not in names
+
+    def test_um_al_fahm(self):
+        cities = parse_cities("אום אל פחם")
+        names = [c[0] for c in cities]
+        assert "אום אל פחם" in names
+        assert "פחם" not in names
+
+    def test_hod_hasharon(self):
+        cities = parse_cities("הוד השרון")
+        names = [c[0] for c in cities]
+        assert "הוד השרון" in names
+        assert "הוד" not in names

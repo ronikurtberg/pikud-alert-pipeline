@@ -66,8 +66,8 @@ CALCULATED_FIELDS = {
 TABLE_DESCRIPTIONS = {
     "messages": "One row per Telegram message. Contains both alert and non-alert messages (event_ended, heads_up, etc.).",
     "alert_details": "One row per city per alert message. Fact table linking messages to cities and zones.",
-    "cities": "Dimension table: unique city/settlement names extracted from alerts.",
-    "zones": "Dimension table: 36 defense zones defined by Home Front Command.",
+    "cities": "Dimension table: unique city/settlement names extracted from alerts. city_name_en provides English transliterations (~92% coverage by alert volume).",
+    "zones": "Dimension table: 36 defense zones defined by Home Front Command. zone_name_en provides English names for all 36 zones.",
 }
 
 FIELD_DESCRIPTIONS = {
@@ -92,12 +92,14 @@ FIELD_DESCRIPTIONS = {
     },
     "cities": {
         "city_id": "Auto-increment primary key",
-        "city_name": "City name as it appears in Telegram text",
-        "canonical_name": "[CALCULATED] Normalized name for display (dash→space unification)",
+        "city_name": "City name as it appears in Telegram text (Hebrew)",
+        "canonical_name": "[CALCULATED] Normalized Hebrew name for display (dash→space unification)",
+        "city_name_en": "English transliteration of city name (NULL = not in translation source)",
     },
     "zones": {
         "zone_id": "Auto-increment primary key",
-        "zone_name": "Defense zone name (e.g., אזור קו העימות)",
+        "zone_name": "Defense zone name in Hebrew (e.g., אזור קו העימות)",
+        "zone_name_en": "English name of defense zone (e.g., Confrontation Line)",
     },
 }
 

@@ -146,6 +146,35 @@ def check_post_build(db_path: str) -> None:
         if null_cities:
             violations.append(f"Null city_id: {null_cities} alert_details rows have NULL city_id")
 
+        # Contract: every city referenced in alert_details must have an English name.
+        # A missing translation means a new city appeared (new Pikud HaOref location or
+        # a parser artifact) and was not covered by the translation dictionaries.
+        missing_city_en = conn.execute(
+            "SELECT c.city_name "
+            "FROM cities c "
+            "WHERE c.city_name_en IS NULL "
+            "AND EXISTS (SELECT 1 FROM alert_details ad WHERE ad.city_id = c.city_id) "
+            "ORDER BY c.city_name"
+        ).fetchall()
+        if missing_city_en:
+            names = [r[0] for r in missing_city_en]
+            violations.append(
+                f"Missing English translation for {len(names)} cities used in alerts "
+                f"(add to city_translations_manual.py): {names[:10]}"
+                + (" ..." if len(names) > 10 else "")
+            )
+
+        # Contract: every zone must have an English name.
+        missing_zone_en = conn.execute(
+            "SELECT zone_name FROM zones WHERE zone_name_en IS NULL ORDER BY zone_name"
+        ).fetchall()
+        if missing_zone_en:
+            names = [r[0] for r in missing_zone_en]
+            violations.append(
+                f"Missing English translation for {len(names)} zones "
+                f"(add to _ZONE_MANUAL_EN in pikud.py): {names}"
+            )
+
         # Contract: message_type is one of the known types
         known_types = {
             "alert",

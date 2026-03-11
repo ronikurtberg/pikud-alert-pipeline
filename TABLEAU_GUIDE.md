@@ -350,7 +350,7 @@ All visualizations use these base filters:
 
 ## Step 8: Updating Data
 
-### Refresh Flow:
+### Refresh Flow (routine data update):
 1. Run `python3 pikud.py delta` to fetch new alerts
 2. Export from the dashboard Pipeline page (either mode)
 3. Upload new CSVs to each Data Stream (Full Refresh mode replaces all data)
@@ -360,6 +360,56 @@ All visualizations use these base filters:
 
 ### Important: DMO Sync Delay
 After uploading new Data Stream files, the DMOs need time to process. Check each DMO's sync status before expecting updated numbers in your vizzes.
+
+---
+
+## Step 8b: Schema Migration — Adding New Columns (one-time)
+
+The `cities` and `zones` tables now include English name columns (`city_name_en`, `zone_name_en`). These did not exist when you originally set up the DMOs. **Uploading the new CSV alone is not enough** — Data Cloud will silently ignore columns it hasn't seen before.
+
+You need to do a one-time schema migration for `Pikud_City` and `Pikud_Zone` DMOs.
+
+### New columns added:
+
+| Table | New Column | Description |
+|---|---|---|
+| `cities.csv` | `city_name_en` | English city name (e.g., "Abu Gosh") — ~92% coverage by alert volume |
+| `zones.csv` | `zone_name_en` | English zone name (e.g., "Confrontation Line") — 36/36 zones covered |
+
+### Migration steps:
+
+**Option A — Edit the existing Data Stream mapping (recommended):**
+1. **Setup > Data Cloud > Data Streams** → open `pikud_cities`
+2. Click **Edit** → go to the **Field Mapping** step
+3. Data Cloud will detect the new column `city_name_en` — map it as `Text`
+4. Save → the Data Stream re-ingests and adds the column to `Pikud_City` DMO
+5. Repeat for `pikud_zones` → map `zone_name_en` as `Text`
+
+**Option B — Delete and recreate the Data Streams:**
+1. Delete `pikud_cities` and `pikud_zones` Data Streams (DMOs will also be deleted)
+2. Re-upload `cities.csv` and `zones.csv` following Step 2 of this guide
+3. Recreate `Pikud_City` and `Pikud_Zone` DMOs (Step 3)
+4. Re-add the relationships in the semantic model (Step 4) — `Pikud_Alert_Detail` FK joins are unchanged
+5. Recreate the `City_Display_Name` calculated field in the semantic model since it references `Pikud_City`
+
+**Option A is safer** — relationships and calculated fields survive. Option B is a full rebuild.
+
+### After migration — add these calculated fields to the semantic model:
+
+**City_Display_Name_EN** (Text) — English city name with Hebrew fallback
+```
+IF NOT ISNULL([Pikud_City].[city_name_en]) THEN [Pikud_City].[city_name_en]
+ELSEIF NOT ISNULL([Pikud_City].[canonical_name]) THEN [Pikud_City].[canonical_name]
+ELSE [Pikud_City].[city_name] END
+```
+
+**Zone_Display_Name_EN** (Text) — English zone name with Hebrew fallback
+```
+IF NOT ISNULL([Pikud_Zone].[zone_name_en]) THEN [Pikud_Zone].[zone_name_en]
+ELSE [Pikud_Zone].[zone_name] END
+```
+
+Replace `City_Display_Name` and `zone_name` with these fields in all vizzes where you want English labels.
 
 ### Automation:
 ```bash

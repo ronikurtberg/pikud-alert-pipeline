@@ -49,6 +49,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_DIR = os.path.join(BASE_DIR, "db")
 SESSION_FILE = os.path.join(BASE_DIR, "pikud_session")
 CHANNEL = "PikudHaOref_all"
+TRANSLATIONS_FILE = os.path.join(DATA_DIR, "cities_translations.json")
 
 API_ID = os.environ.get("TELEGRAM_API_ID", "")
 API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
@@ -282,7 +283,7 @@ def extract_zones_and_cities(text: str) -> list[tuple[str, list[tuple[str, str |
     while i < len(zone_splits) - 1:
         zone_name = zone_splits[i].strip()
         cities_text = zone_splits[i + 1] if i + 1 < len(zone_splits) else ""
-        cities_text = re.split(r"היכנסו|חשד\s+לכניסת|להנחיות|לשאלות|כדי\s+שנהיה|בעקבות\s+כניסת", cities_text)[0]
+        cities_text = re.split(r"היכנסו|חשד\s+לכניסת|חשש\s+לחדירת|להנחיות|לשאלות|כדי\s+שנהיה|בעקבות\s+כניסת", cities_text)[0]
         cities = parse_cities(cities_text)
         if cities:
             results.append((zone_name, cities))
@@ -312,22 +313,29 @@ _MULTI_WORD_PREFIXES = [
     "מעלות",
     "שדה",
     "עין",
+    "עינות",
     "אבן",
     "גן",
     "נווה",
+    "נוה",       # alternate spelling of נווה (e.g. נוה איתן)
     "נאות",
     "רמת",
     "אור",
     "מצפה",
     "נוף",
+    "נופי",      # e.g. נופי פרת
     "אזור תעשייה",
+    "איזור תעשייה",  # alternate spelling of אזור תעשייה (aleph variant)
     "פארק תעשיות",
+    "פארק תעשייה",   # alternate spelling (e.g. פארק תעשייה ראם)
     "מרכז אזורי",
     "קיבוץ",
+    "קבוצת",
     "מושב",
     "בני",
     "בן",
     "הר",
+    "הוד",       # e.g. הוד השרון
     "מגדל",
     "נחל",
     "צומת",
@@ -340,6 +348,38 @@ _MULTI_WORD_PREFIXES = [
     "פנימיית",
     "מכללת",
     "שער",
+    "מבוא",      # e.g. מבוא חמה, מבוא כרמל
+    "מבואות",
+    "מג'דל",     # e.g. מג'דל שמס, מג'דל כרום
+    "קדמת",      # e.g. קדמת צבי, קדמת גליל
+    "ביר",       # e.g. ביר אלמכסור
+    "כרם",       # e.g. כרם בן זמרה, כרם מהר"ל
+    "כרמי",      # e.g. כרמי צור, כרמי גת
+    "ערב",       # e.g. ערב אל-עראמשה
+    "מרכז",      # e.g. מרכז חבר, מרכז ימי קיסריה
+    "ישובי",     # e.g. ישובי יעל, ישובי אומן
+    "שדי",       # e.g. שדי תרומות
+    "אום",       # e.g. אום אל פחם
+    "אל",        # e.g. אל רום, אל עראמשה
+    "מי",        # e.g. מי עמי
+    "בת",        # e.g. בת חפר, בת ים (single-word too)
+    "פרדס",      # e.g. פרדס חנה כרכור
+    "עלי",       # e.g. עלי זהב
+    "מלון",      # e.g. מלון פרא, מלון סיקס סנסס
+    "מטווח",     # e.g. מטווח ניר עם
+    "גני",       # e.g. גני חוגה
+    "ורד",       # e.g. ורד הגליל
+    "בוסתן",     # e.g. בוסתן הגליל
+    "רפטינג",    # e.g. רפטינג נהר הירדן
+    "בתי",       # e.g. בתי מלון ים המלח
+    "ואדי",      # e.g. ואדי אל חמאם, ואדי ערה
+    "שבי",       # e.g. שבי ציון
+    "נתיב",      # e.g. נתיב השיירה, נתיב הלה
+    "תחנת",      # e.g. תחנת רכבת כפר יהושוע
+    "דיר",       # e.g. דיר חנא, דיר אל-אסד
+    "נס",        # e.g. נס עמים, נס ציונה (though נס ציונה is usually comma-split)
+    "אבי",       # e.g. אבי חי
+    "מסילת",     # e.g. מסילת ציון
 ]
 
 # Known compound city names (4+ words) starting with multi-word prefixes.
@@ -382,10 +422,78 @@ _KNOWN_COMPOUND_CITIES = sorted(
         "מרכז אזורי רמת כורזים",
         # פארק תעשיות + multi-word suffix
         "פארק תעשיות מגדל עוז",
+        # רפטינג / בתי / מרכז multi-word compounds
+        "רפטינג נהר הירדן",
+        "בתי מלון ים המלח",
+        "מרכז ימי קיסריה",
+        # פרדס חנה כרכור (3-word city name)
+        "פרדס חנה כרכור",
+        # 3-word city names starting with a single-word prefix
+        "כרם בן זמרה",
+        "אום אל פחם",
+        "אום אל קוטוף",
+        "אום אלג'נם",
+        "ערב אל עראמשה",
+        "דיר אל-אסד",
+        "פנימיית עין כרם",
+        "חצור הגלילית",
+        "בית לחם הגלילית",
+        "תחנת רכבת כפר יהושוע",
+        "ואדי אל חמאם",
+        "עין אל-אסד",
+        "עין אל אסד",
+        "עכו - אזור תעשייה",
+        "קצרין - אזור תעשייה",
+        "ירושלים - אזור תעשייה עטרות",
+        "כינרת מושבה",
+        "כינרת קבוצה",
     ],
     key=lambda x: len(x.split()),
     reverse=True,
 )
+
+
+def _normalize_city_dash(name: str) -> str:
+    """Normalize 'City -suffix' → 'City - suffix' (ensure single space on both sides of dash)."""
+    return re.sub(r"\s+-\s*", " - ", name)
+
+
+def _apply_city_prefix_inheritance(raw_items: list[str]) -> list[str]:
+    """Apply prefix inheritance to a list of comma-split items.
+
+    Handles the pattern "City - A,B,C" where items after the first (A) inherit
+    the "City - " prefix for items B, C, etc. Also handles multiple groups in a
+    single block: "City1 - A,B, City2 - X,Y" where City2 resets the prefix.
+
+    Prefix inheritance only applies to bare suffix items — those that are a
+    single token with no internal spaces (e.g. Hebrew letter codes like יב, מרינה).
+    Multi-word items (e.g. ביצרון, גן יבנה) always reset the prefix since they
+    are standalone city names, not bare neighborhood suffixes.
+
+    All produced names are dash-normalized so "אשדוד -יב" and "אשדוד - יב"
+    become the same canonical form "אשדוד - יב".
+    """
+    result = []
+    current_prefix = ""
+    for item in raw_items:
+        cn = item.strip().strip("*").strip()
+        if not cn:
+            continue
+        # Check if this item starts a new "City - suffix" group
+        prefix_match = re.match(r"^(.+?\s+-\s*)\S", cn)
+        if prefix_match:
+            # Normalize to canonical "City - " prefix (single space on both sides)
+            current_prefix = re.sub(r"\s+-\s*$", " - ", prefix_match.group(1))
+            result.append(_normalize_city_dash(cn))
+        elif current_prefix and " " not in cn:
+            # Only inherit prefix for bare single-token suffixes (no spaces)
+            result.append(current_prefix + cn)
+        else:
+            # Multi-word item or item with spaces: treat as standalone city
+            # and reset the current prefix group
+            current_prefix = ""
+            result.append(cn)
+    return result
 
 
 def parse_cities(text: str) -> list[tuple[str, str | None]]:
@@ -412,6 +520,9 @@ def parse_cities(text: str) -> list[tuple[str, str | None]]:
         "בהתאם",
         "המלאות",
         "התרעה",
+        "חשש",
+        "לחדירת",
+        "מחבלים",
     ]
 
     # Phase 1: Try splitting by shelter-time parentheses (most reliable)
@@ -423,16 +534,14 @@ def parse_cities(text: str) -> list[tuple[str, str | None]]:
         # Shelter-time delimited: split each text block by comma
         for j in range(0, len(parts)):
             if j % 2 == 0:
-                city_names = re.split(r"[,،]", parts[j])
+                raw_items = re.split(r"[,،]", parts[j])
                 shelter_time = parts[j + 1].strip() if j + 1 < len(parts) else None
-                for cn in city_names:
-                    cn = cn.strip().strip("*").strip()
+                for cn in _apply_city_prefix_inheritance(raw_items):
                     if cn and len(cn) > 1 and not any(k in cn for k in stop_words):
                         cities.append((cn, shelter_time))
     elif has_comma:
-        # Comma-separated (no shelter times)
-        for cn in re.split(r"[,،]", text):
-            cn = cn.strip().strip("*").strip()
+        raw_items = re.split(r"[,،]", text)
+        for cn in _apply_city_prefix_inheritance(raw_items):
             if cn and len(cn) > 1 and not any(k in cn for k in stop_words):
                 cities.append((cn, None))
     else:
@@ -476,7 +585,9 @@ def _split_space_separated_cities(text: str, stop_words: list[str]) -> list[tupl
                 prefix_words = prefix.split()
                 if i + len(prefix_words) <= len(words):
                     candidate = " ".join(words[i : i + len(prefix_words)])
-                    if candidate == prefix or candidate.startswith(prefix):
+                    # Only exact-match for single-word prefixes to avoid substring greedy matching
+                    # (e.g. prefix "מי" must not match word "מיצר")
+                    if candidate == prefix:
                         # Multi-word prefix: take prefix + 1 more word (e.g. "קריית שמונה", "בית שאן")
                         end = i + len(prefix_words)
                         if end < len(words) and not any(k in words[end] for k in stop_words):
@@ -527,13 +638,15 @@ CREATE TABLE IF NOT EXISTS db_info (
 
 CREATE TABLE IF NOT EXISTS zones (
     zone_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    zone_name TEXT UNIQUE NOT NULL
+    zone_name TEXT UNIQUE NOT NULL,
+    zone_name_en TEXT  -- English name (NULL = not yet translated)
 );
 
 CREATE TABLE IF NOT EXISTS cities (
     city_id INTEGER PRIMARY KEY AUTOINCREMENT,
     city_name TEXT UNIQUE NOT NULL,
-    canonical_name TEXT  -- normalized display name (NULL = city_name is canonical)
+    canonical_name TEXT,  -- normalized display name (NULL = city_name is canonical)
+    city_name_en TEXT  -- English name (NULL = not yet translated)
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -614,6 +727,71 @@ SELECT date(datetime_israel) as alert_date, COUNT(*) as total_messages,
        SUM(CASE WHEN alert_type = 'aircraft' THEN 1 ELSE 0 END) as aircraft
 FROM messages WHERE is_drill = 0 GROUP BY alert_date;
 """
+
+
+def _load_translations() -> tuple[dict[str, str], dict[str, str]]:
+    """Load Hebrew→English city and zone name translations from the translations file.
+
+    Returns (city_lookup, zone_lookup) where keys are Hebrew names and values are English names.
+    Zone lookup keys use the bare zone name without the 'אזור ' prefix (matching the source data).
+    The city lookup is supplemented with CITY_MANUAL_EN for entries not in the JSON file.
+    """
+    from dashboard_app.city_translations_manual import CITY_MANUAL_EN
+
+    if not os.path.exists(TRANSLATIONS_FILE):
+        return dict(CITY_MANUAL_EN), {}
+    with open(TRANSLATIONS_FILE, encoding="utf-8") as f:
+        entries = json.load(f)
+    city_lookup = {e["name"]: e["name_en"] for e in entries if e.get("name") and e.get("name_en")}
+    # Manual entries fill gaps; JSON file takes precedence for any overlaps
+    combined = {**CITY_MANUAL_EN, **city_lookup}
+    zone_lookup = {e["zone"]: e["zone_en"] for e in entries if e.get("zone") and e.get("zone_en")}
+    return combined, zone_lookup
+
+
+_ZONE_MANUAL_EN: dict[str, str] = {
+    "שפלת יהודה": "Judean Foothills",
+    "המפרץ": "Haifa Bay",
+    "גולן דרום": "South Golan",
+    "גולן צפון": "North Golan",
+    "העמקים": "The Valleys",
+    "מרכז הגליל": "Central Galilee",
+    "הכרמל": "Carmel",
+    "עמק יזרעאל": "Jezreel Valley",
+    "הקריות": "The Krayot",
+}
+
+
+def _apply_english_names(conn: sqlite3.Connection) -> tuple[int, int]:
+    """Populate city_name_en and zone_name_en columns from the translations lookup.
+
+    Returns (cities_updated, zones_updated) counts.
+    """
+    city_lookup, zone_lookup = _load_translations()
+
+    cities = conn.execute("SELECT city_id, city_name FROM cities").fetchall()
+    city_updates = [
+        (city_lookup[name], city_id)
+        for city_id, name in cities
+        if name in city_lookup
+    ]
+    if city_updates:
+        conn.executemany("UPDATE cities SET city_name_en=? WHERE city_id=?", city_updates)
+
+    # Our zone names have the 'אזור ' prefix; the source data uses bare zone names.
+    # Fall back to _ZONE_MANUAL_EN for entries missing from the translation file.
+    zones = conn.execute("SELECT zone_id, zone_name FROM zones").fetchall()
+    zone_updates = []
+    for zone_id, zone_name in zones:
+        bare = zone_name.replace("אזור ", "", 1).strip()
+        en = zone_lookup.get(bare) or _ZONE_MANUAL_EN.get(bare)
+        if en:
+            zone_updates.append((en, zone_id))
+    if zone_updates:
+        conn.executemany("UPDATE zones SET zone_name_en=? WHERE zone_id=?", zone_updates)
+
+    conn.commit()
+    return len(city_updates), len(zone_updates)
 
 
 def build_database(ver_dir: str, db_path: str, version: str) -> bool:
@@ -754,6 +932,10 @@ def build_database(ver_dir: str, db_path: str, version: str) -> bool:
     if canonical_count:
         conn.commit()
         print(f"  Canonicalized: {canonical_count} city name pairs unified")
+
+    # Enrich cities and zones with English names from translation lookup
+    en_city_count, en_zone_count = _apply_english_names(conn)
+    print(f"  English names: {en_city_count} cities, {en_zone_count} zones translated")
 
     # Update DB symlink
     _update_symlink(DB_DIR, "current", os.path.basename(db_path))
