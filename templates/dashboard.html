@@ -527,7 +527,7 @@ tr:hover td{background:#f8f9ff}
     <div class="grid g2" style="gap:12px">
       <div class="card" style="border-top:3px solid var(--green)"><div class="card-b" style="padding:14px">
         <div style="font-weight:800;font-size:14px;color:var(--green);margin-bottom:6px">Full Export (Recommended)</div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6">All columns including pre-computed fields: <code>message_type</code>, <code>alert_type</code>, <code>is_drill</code>, <code>alert_date</code>, <code>alert_time_local</code>, <code>canonical_name</code>, etc. Load directly into any BI tool and start building visualizations immediately.</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6">All columns including pre-computed fields: <code>message_type</code>, <code>alert_type</code>, <code>is_drill</code>, <code>alert_date</code>, <code>alert_time_local</code>, <code>canonical_name</code>, <code>city_name_en</code>, <code>zone_name_en</code>, etc. Load directly into any BI tool and start building English-language visualizations immediately.</div>
         <a href="/api/export/full" class="btn primary" style="text-decoration:none;display:inline-block;font-size:13px;padding:8px 16px">Download Full Export</a>
       </div></div>
       <div class="card" style="border-top:3px solid var(--orange)"><div class="card-b" style="padding:14px">
@@ -560,14 +560,19 @@ tr:hover td{background:#f8f9ff}
           <div style="font-weight:700;color:var(--green)">cities</div>
           <div style="font-size:9px;color:var(--text3)">PK: city_id</div>
           <div style="font-size:9px;color:var(--text3)">city_name</div>
+          <div style="font-size:9px;color:var(--text3)">canonical_name</div>
+          <div style="font-size:9px;color:var(--cyan);font-weight:700">city_name_en ✦</div>
         </div>
       </div>
       <div style="text-align:center;margin-top:4px">
-        <div style="background:var(--bg1);padding:8px;border-radius:6px;border:1px solid var(--border);display:inline-block;min-width:150px">
+        <div style="background:var(--bg1);padding:8px;border-radius:6px;border:1px solid var(--border);display:inline-block;min-width:160px">
           <div style="font-weight:700;color:var(--orange)">zones</div>
-          <div style="font-size:9px;color:var(--text3)">PK: zone_id | zone_name</div>
+          <div style="font-size:9px;color:var(--text3)">PK: zone_id</div>
+          <div style="font-size:9px;color:var(--text3)">zone_name</div>
+          <div style="font-size:9px;color:var(--cyan);font-weight:700">zone_name_en ✦</div>
         </div>
       </div>
+      <div style="font-size:9px;color:var(--cyan);text-align:center;margin-top:6px">✦ English name — 100% coverage enforced by post-build contract</div>
     </div>
   </div></div>
 
@@ -576,7 +581,7 @@ tr:hover td{background:#f8f9ff}
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px">
       These fields are created in the Tableau Next Semantic Model. When using the <strong>Raw + Formulas</strong> export, recreate them from the manifest. The <strong>Full Export</strong> includes the base fields pre-computed.
     </div>
-      <div style="font-weight:700;font-size:12px;color:var(--text1);margin-bottom:8px">Calculated Dimensions (11)</div>
+      <div style="font-weight:700;font-size:12px;color:var(--text1);margin-bottom:8px">Calculated Dimensions (13)</div>
     <div id="tableau-calc-fields" style="font-size:11px">
       <table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead><tr style="border-bottom:2px solid var(--border);text-align:left">
@@ -587,7 +592,19 @@ tr:hover td{background:#f8f9ff}
           <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>Extract_Threat_Type</code></td><td style="padding:6px">raw_text</td><td style="padding:6px">Threat: rockets, aircraft, infiltration, earthquake, hazmat</td><td style="padding:6px">Text</td></tr>
           <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>Is_Real_Alert</code></td><td style="padding:6px">Classify_Raw_Text_Event_Status, Is_Drill_Flag</td><td style="padding:6px">TRUE for real siren activations (not drills/updates)</td><td style="padding:6px">Boolean</td></tr>
           <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>Canonical_Name</code></td><td style="padding:6px">city_name</td><td style="padding:6px">Normalized name (dash→space unification)</td><td style="padding:6px">Text</td></tr>
-          <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>City_Display_Name</code></td><td style="padding:6px">Canonical_Name, city_name</td><td style="padding:6px">Unified city name for grouping</td><td style="padding:6px">Text</td></tr>
+          <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>City_Display_Name</code></td><td style="padding:6px">Canonical_Name, city_name</td><td style="padding:6px">Unified city name for grouping (Hebrew)</td><td style="padding:6px">Text</td></tr>
+          <tr style="border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--cyan) 8%,transparent)">
+            <td style="padding:6px"><code style="color:var(--cyan)">City_Display_Name_EN</code></td>
+            <td style="padding:6px">city_name_en, canonical_name, city_name</td>
+            <td style="padding:6px">English city name with Hebrew fallback — use for all English-language dashboards</td>
+            <td style="padding:6px">Text</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--cyan) 8%,transparent)">
+            <td style="padding:6px"><code style="color:var(--cyan)">Zone_Display_Name_EN</code></td>
+            <td style="padding:6px">zone_name_en, zone_name</td>
+            <td style="padding:6px">English zone name with Hebrew fallback — use for all English-language dashboards</td>
+            <td style="padding:6px">Text</td>
+          </tr>
           <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>Alert_Date</code></td><td style="padding:6px">raw_text</td><td style="padding:6px">Date from alert text (ground truth Israel date)</td><td style="padding:6px">Text</td></tr>
           <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>Alert_Time</code></td><td style="padding:6px">raw_text</td><td style="padding:6px">Time from alert text</td><td style="padding:6px">Text</td></tr>
           <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px"><code>Alert_Date_Parsed</code></td><td style="padding:6px">Alert_Date</td><td style="padding:6px">Proper Date type for filters and daily charts</td><td style="padding:6px">Date</td></tr>
@@ -601,6 +618,7 @@ tr:hover td{background:#f8f9ff}
           </tr>
         </tbody>
       </table>
+      <div style="font-size:10px;color:var(--cyan);margin-top:6px">✦ Highlighted rows are new fields added with English translation support (100% city &amp; zone coverage enforced).</div>
     </div>
       <div style="font-weight:700;font-size:12px;color:var(--text1);margin-top:14px;margin-bottom:8px">Calculated
           Measures (14)
